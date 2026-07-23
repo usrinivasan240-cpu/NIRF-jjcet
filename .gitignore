@@ -1,0 +1,7 @@
+node_modules/
+.next/
+dist/
+*.db
+install_log.txt
+server_log.txt
+.env
