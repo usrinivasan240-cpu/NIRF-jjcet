@@ -1,126 +1,91 @@
 import { Router, Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
-import { authenticate } from "../middleware/auth";
+import { getDb } from "../config/firebase";
+import { v4 as uuid } from "uuid";
 
 const router = Router();
-const prisma = new PrismaClient();
 
-router.get("/me", authenticate, async (req: Request, res: Response) => {
+router.get("/", async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const db = getDb();
+    const departmentScope = (req as any).departmentScope;
+    let query: any = db.collection("signatures");
 
-    const signature = await prisma.userSignature.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "desc" },
-    });
+    const snapshot = await query.orderBy("signedAt", "desc").get();
+    const signatures = snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() }));
 
-    if (!signature) {
-      res.status(404).json({ error: "No signature found" });
-      return;
+    const enriched = await Promise.all(
+      signatures.map(async (sig: any) => {
+        const result: any = { ...sig };
+        if (sig.userId) {
+          const userDoc = await db.collection("users").doc(sig.userId).get();
+          if (userDoc.exists) {
+            const ud = userDoc.data()!;
+            result.user = { id: userDoc.id, name: ud.name, email: ud.email, role: ud.role };
+          }
+        }
+        if (departmentScope && sig.userId) {
+          const userDoc = await db.collection("users").doc(sig.userId).get();
+          if (userDoc.exists && userDoc.data()!.departmentId !== departmentScope) {
+            return null;
+          }
+        }
+        return result;
+      })
+    );
+
+    res.json(enriched.filter(Boolean));
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch signatures" });
+  }
+});
+
+router.get("/:id", async (req: Request, res: Response) => {
+  try {
+    const db = getDb();
+    const doc = await db.collection("signatures").doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Signature not found" });
+
+    const sig = { id: doc.id, ...doc.data() } as any;
+    if (sig.userId) {
+      const userDoc = await db.collection("users").doc(sig.userId).get();
+      if (userDoc.exists) {
+        const ud = userDoc.data()!;
+        sig.user = { id: userDoc.id, name: ud.name, email: ud.email, role: ud.role };
+      }
     }
 
-    res.json(signature);
+    res.json(sig);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch signature" });
   }
 });
 
-router.post("/", authenticate, async (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
-    const { signatureImage, sealImage, designation } = req.body;
+    const db = getDb();
+    const { userId, reportId, signatureData } = req.body;
+    if (!userId || !reportId || !signatureData) return res.status(400).json({ error: "userId, reportId, and signatureData are required" });
 
-    if (!signatureImage) {
-      res.status(400).json({ error: "Signature image is required" });
-      return;
-    }
+    const id = uuid();
+    const data = { userId, reportId, signatureData, signedAt: new Date().toISOString(), createdAt: new Date().toISOString() };
+    await db.collection("signatures").doc(id).set(data);
 
-    const existing = await prisma.userSignature.findFirst({
-      where: { userId: user.id },
-    });
-
-    let signature;
-    if (existing) {
-      signature = await prisma.userSignature.update({
-        where: { id: existing.id },
-        data: { signatureImage, sealImage, designation },
-      });
-    } else {
-      signature = await prisma.userSignature.create({
-        data: {
-          userId: user.id,
-          signatureImage,
-          sealImage,
-          designation,
-        },
-      });
-    }
-
-    res.json(signature);
+    res.status(201).json({ id, ...data });
   } catch (error) {
-    res.status(500).json({ error: "Failed to create/update signature" });
+    res.status(500).json({ error: "Failed to create signature" });
   }
 });
 
-router.post("/sign/:reportId", authenticate, async (req: Request, res: Response) => {
+router.delete("/:id", async (req: Request, res: Response) => {
   try {
-    const { reportId } = req.params;
-    const user = (req as any).user;
+    const db = getDb();
+    const doc = await db.collection("signatures").doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Signature not found" });
 
-    const signature = await prisma.userSignature.findFirst({
-      where: { userId: user.id },
-    });
-
-    if (!signature) {
-      res.status(400).json({ error: "Please create a signature first" });
-      return;
-    }
-
-    const report = await prisma.report.findUnique({ where: { id: reportId } });
-    if (!report) {
-      res.status(404).json({ error: "Report not found" });
-      return;
-    }
-
-    const existingSig = await prisma.reportSignature.findFirst({
-      where: { reportId, userId: user.id },
-    });
-
-    if (existingSig) {
-      res.status(400).json({ error: "You have already signed this report" });
-      return;
-    }
-
-    const reportSignature = await prisma.reportSignature.create({
-      data: {
-        reportId,
-        userId: user.id,
-        signatureId: signature.id,
-        signatureImage: signature.signatureImage,
-        signedAt: new Date(),
-      },
-      include: { user: { select: { id: true, name: true, email: true, role: true } } },
-    });
-
-    res.status(201).json(reportSignature);
+    await db.collection("signatures").doc(req.params.id).delete();
+    res.json({ message: "Signature deleted successfully" });
   } catch (error) {
-    res.status(500).json({ error: "Failed to sign report" });
-  }
-});
-
-router.get("/report/:reportId", authenticate, async (req: Request, res: Response) => {
-  try {
-    const { reportId } = req.params;
-
-    const signatures = await prisma.reportSignature.findMany({
-      where: { reportId },
-      include: { user: { select: { id: true, name: true, email: true, role: true } } },
-      orderBy: { signedAt: "desc" },
-    });
-
-    res.json(signatures);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch report signatures" });
+    res.status(500).json({ error: "Failed to delete signature" });
   }
 });
 

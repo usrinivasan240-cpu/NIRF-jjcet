@@ -1,0 +1,147 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.role in ['SUPER_ADMIN'];
+    }
+
+    function isPrincipal() {
+      return request.auth != null && request.auth.token.role in ['SUPER_ADMIN', 'PRINCIPAL'];
+    }
+
+    function isVP() {
+      return request.auth != null && request.auth.token.role in ['SUPER_ADMIN', 'PRINCIPAL', 'VICE_PRINCIPAL'];
+    }
+
+    function isHOD() {
+      return request.auth != null && request.auth.token.role in ['SUPER_ADMIN', 'PRINCIPAL', 'VICE_PRINCIPAL', 'HOD'];
+    }
+
+    function isStaff() {
+      return request.auth != null && request.auth.token.role in ['SUPER_ADMIN', 'PRINCIPAL', 'VICE_PRINCIPAL', 'HOD', 'DEPARTMENT_STAFF'];
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function inDepartment(deptId) {
+      return !exists(/databases/$(database)/documents/departments/$(deptId));
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow update: if isAdmin() || isOwner(userId);
+      allow delete: if isAdmin();
+    }
+
+    // Departments collection
+    match /departments/{deptId} {
+      allow read: if isAuthenticated();
+      allow write: if isVP();
+    }
+
+    // Faculties collection
+    match /faculties/{facultyId} {
+      allow read: if isAuthenticated();
+      allow create: if isHOD();
+      allow update: if isHOD();
+      allow delete: if isVP();
+    }
+
+    // Students collection
+    match /students/{studentId} {
+      allow read: if isAuthenticated();
+      allow create: if isHOD();
+      allow update: if isHOD();
+      allow delete: if isVP();
+    }
+
+    // Publications collection
+    match /publications/{pubId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
+      allow update: if isStaff();
+      allow delete: if isHOD();
+    }
+
+    // Patents collection
+    match /patents/{patentId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
+      allow update: if isStaff();
+      allow delete: if isHOD();
+    }
+
+    // Research collection
+    match /research/{researchId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
+      allow update: if isStaff();
+      allow delete: if isHOD();
+    }
+
+    // Events collection
+    match /events/{eventId} {
+      allow read: if isAuthenticated();
+      allow create: if isHOD();
+      allow update: if isHOD();
+      allow delete: if isVP();
+    }
+
+    // Targets collection
+    match /targets/{targetId} {
+      allow read: if isAuthenticated();
+      allow create: if isHOD();
+      allow update: if isHOD();
+      allow delete: if isVP();
+    }
+
+    // Reports collection
+    match /reports/{reportId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
+      allow update: if isStaff() && !resource.data.status.matches('LOCKED');
+      allow delete: if isVP() && !resource.data.status.matches('LOCKED');
+    }
+
+    // Approvals collection
+    match /approvals/{approvalId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
+      allow update: if isHOD() || isVP() || isPrincipal();
+      allow delete: if false;
+    }
+
+    // Signatures collection
+    match /signatures/{sigId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
+      allow delete: if isVP();
+    }
+
+    // Notifications collection
+    match /notifications/{notifId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow update: if isAuthenticated() && isOwner(resource.data.userId);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if true;
+    }
+
+    // Documents collection
+    match /documents/{docId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
+      allow delete: if isVP();
+    }
+  }
+}

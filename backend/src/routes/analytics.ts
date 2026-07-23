@@ -1,77 +1,82 @@
 import { Router, Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
-import { authenticate, enforceDepartmentScope } from "../middleware/auth";
+import { getDb } from "../config/firebase";
 
 const router = Router();
-const prisma = new PrismaClient();
 
-router.get("/", authenticate, enforceDepartmentScope, async (req: Request, res: Response) => {
+router.get("/dashboard", async (req: Request, res: Response) => {
   try {
     const departmentScope = (req as any).departmentScope;
+    const db = getDb();
 
-    const where: any = {};
+    let facultyQuery: FirebaseFirestore.Query = db.collection("faculties");
+    let studentQuery: FirebaseFirestore.Query = db.collection("students");
+    let publicationQuery: FirebaseFirestore.Query = db.collection("publications");
+    let patentQuery: FirebaseFirestore.Query = db.collection("patents");
+    let eventQuery: FirebaseFirestore.Query = db.collection("events");
+
     if (departmentScope) {
-      where.departmentId = departmentScope;
+      facultyQuery = facultyQuery.where("departmentId", "==", departmentScope);
+      studentQuery = studentQuery.where("departmentId", "==", departmentScope);
+      publicationQuery = publicationQuery.where("departmentId", "==", departmentScope);
+      patentQuery = patentQuery.where("departmentId", "==", departmentScope);
+      eventQuery = eventQuery.where("departmentId", "==", departmentScope);
     }
 
-    const [
-      totalFaculties,
-      totalStudents,
-      totalDepartments,
-      totalPublications,
-      totalPatents,
-      totalResearch,
-      totalEvents,
-      totalReports,
-      totalTargets,
-      departmentStats,
-    ] = await Promise.all([
-      prisma.faculty.count({ where: departmentScope ? { departmentId: departmentScope } : {} }),
-      prisma.student.count({ where: departmentScope ? { departmentId: departmentScope } : {} }),
-      prisma.department.count(),
-      prisma.publication.count({
-        where: departmentScope ? { faculty: { departmentId: departmentScope } } : {},
-      }),
-      prisma.patent.count({
-        where: departmentScope ? { faculty: { departmentId: departmentScope } } : {},
-      }),
-      prisma.research.count({
-        where: departmentScope ? { faculty: { departmentId: departmentScope } } : {},
-      }),
-      prisma.event.count({ where: departmentScope ? { departmentId: departmentScope } : {} }),
-      prisma.report.count({ where: departmentScope ? { departmentId: departmentScope } : {} }),
-      prisma.target.count({ where: departmentScope ? { departmentId: departmentScope } : {} }),
-      prisma.department.findMany({
-        select: {
-          id: true,
-          name: true,
-          code: true,
-          _count: {
-            select: {
-              faculties: true,
-              students: true,
-            },
-          },
-        },
-      }),
-    ]);
+    const [facultySnap, studentSnap, deptSnap, pubSnap, patentSnap, eventSnap] =
+      await Promise.all([
+        facultyQuery.get(),
+        studentQuery.get(),
+        db.collection("departments").get(),
+        publicationQuery.get(),
+        patentQuery.get(),
+        eventQuery.get(),
+      ]);
 
     res.json({
       counts: {
-        faculties: totalFaculties,
-        students: totalStudents,
-        departments: totalDepartments,
-        publications: totalPublications,
-        patents: totalPatents,
-        research: totalResearch,
-        events: totalEvents,
-        reports: totalReports,
-        targets: totalTargets,
+        faculties: facultySnap.size,
+        students: studentSnap.size,
+        departments: deptSnap.size,
+        publications: pubSnap.size,
+        patents: patentSnap.size,
+        events: eventSnap.size,
       },
-      departmentBreakdown: departmentStats,
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch analytics" });
+    res.status(500).json({ error: "Failed to fetch dashboard analytics" });
+  }
+});
+
+router.get("/department", async (req: Request, res: Response) => {
+  try {
+    const db = getDb();
+
+    const deptSnap = await db.collection("departments").get();
+    const departments = deptSnap.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    }));
+
+    const results = await Promise.all(
+      departments.map(async (dept: any) => {
+        const [facultySnap, studentSnap] = await Promise.all([
+          db.collection("faculties").where("departmentId", "==", dept.id).get(),
+          db.collection("students").where("departmentId", "==", dept.id).get(),
+        ]);
+
+        return {
+          id: dept.id,
+          name: dept.name,
+          code: dept.code,
+          facultyCount: facultySnap.size,
+          studentCount: studentSnap.size,
+        };
+      })
+    );
+
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch department analytics" });
   }
 });
 

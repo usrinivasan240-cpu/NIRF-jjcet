@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { getDb } from "../config/firebase";
 
 const router = Router();
 
@@ -57,21 +58,60 @@ router.post("/login", async (req: Request, res: Response) => {
       return;
     }
 
-    const user = mockUsers.find(
+    const mockUser = mockUsers.find(
       (u) => u.email === email && u.password === password
     );
 
-    if (!user) {
+    if (mockUser) {
+      const token = jwt.sign(
+        {
+          id: mockUser.id,
+          email: mockUser.email,
+          role: mockUser.role,
+          departmentId: mockUser.departmentId,
+        },
+        JWT_SECRET,
+        { expiresIn: "24h" }
+      );
+
+      res.json({
+        success: true,
+        message: "Login successful",
+        data: {
+          token,
+          user: {
+            id: mockUser.id,
+            email: mockUser.email,
+            name: mockUser.name,
+            role: mockUser.role,
+            departmentId: mockUser.departmentId,
+          },
+        },
+      });
+      return;
+    }
+
+    const db = getDb();
+    const snapshot = await db
+      .collection("users")
+      .where("email", "==", email)
+      .where("password", "==", password)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
 
+    const firestoreUser = snapshot.docs[0].data();
+
     const token = jwt.sign(
       {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        departmentId: user.departmentId,
+        id: snapshot.docs[0].id,
+        email: firestoreUser.email,
+        role: firestoreUser.role,
+        departmentId: firestoreUser.departmentId || null,
       },
       JWT_SECRET,
       { expiresIn: "24h" }
@@ -83,11 +123,11 @@ router.post("/login", async (req: Request, res: Response) => {
       data: {
         token,
         user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          departmentId: user.departmentId,
+          id: snapshot.docs[0].id,
+          email: firestoreUser.email,
+          name: firestoreUser.name,
+          role: firestoreUser.role,
+          departmentId: firestoreUser.departmentId || null,
         },
       },
     });
@@ -107,18 +147,33 @@ router.get("/profile", async (req: Request, res: Response) => {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, JWT_SECRET) as any;
 
-    const user = mockUsers.find((u) => u.id === decoded.id);
-    if (!user) {
+    const mockUser = mockUsers.find((u) => u.id === decoded.id);
+    if (mockUser) {
+      res.json({
+        id: mockUser.id,
+        email: mockUser.email,
+        name: mockUser.name,
+        role: mockUser.role,
+        departmentId: mockUser.departmentId,
+      });
+      return;
+    }
+
+    const db = getDb();
+    const doc = await db.collection("users").doc(decoded.id).get();
+
+    if (!doc.exists) {
       res.status(404).json({ error: "User not found" });
       return;
     }
 
+    const firestoreUser = doc.data()!;
     res.json({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      departmentId: user.departmentId,
+      id: doc.id,
+      email: firestoreUser.email,
+      name: firestoreUser.name,
+      role: firestoreUser.role,
+      departmentId: firestoreUser.departmentId || null,
     });
   } catch (error) {
     res.status(401).json({ error: "Invalid token" });

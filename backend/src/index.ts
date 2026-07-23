@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import { config } from "./config";
+import { initFirebase } from "./config/firebase";
 import { errorHandler, notFound } from "./middleware/errorHandler";
 import { authenticate, enforceDepartmentScope } from "./middleware/auth";
 
@@ -22,6 +23,8 @@ import notificationRoutes from "./routes/notifications";
 import userRoutes from "./routes/users";
 import analyticsRoutes from "./routes/analytics";
 import documentRoutes from "./routes/documents";
+
+initFirebase();
 
 const app = express();
 

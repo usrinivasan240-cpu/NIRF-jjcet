@@ -1,60 +1,86 @@
 import { Router, Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
-import { authenticate, enforceDepartmentScope } from "../middleware/auth";
+import { getDb } from "../config/firebase";
+import { v4 as uuid } from "uuid";
 
 const router = Router();
-const prisma = new PrismaClient();
-
 const approvalLevels = ["STAFF", "HOD", "VP", "PRINCIPAL", "LOCKED"];
 
-router.get("/", authenticate, enforceDepartmentScope, async (req: Request, res: Response) => {
+router.get("/", async (req: Request, res: Response) => {
   try {
+    const db = getDb();
     const user = (req as any).user;
-    const where: any = {};
+    let query: any = db.collection("approvals");
 
     if (user.role === "HOD") {
-      where.level = "HOD";
-      where.status = "PENDING";
+      query = query.where("level", "==", "HOD").where("status", "==", "PENDING");
     } else if (user.role === "VICE_PRINCIPAL") {
-      where.level = "VP";
-      where.status = "PENDING";
+      query = query.where("level", "==", "VP").where("status", "==", "PENDING");
     } else if (user.role === "PRINCIPAL") {
-      where.level = "PRINCIPAL";
-      where.status = "PENDING";
-    } else if (user.role === "SUPER_ADMIN") {
-      where.status = "PENDING";
-    } else {
-      where.userId = user.id;
+      query = query.where("level", "==", "PRINCIPAL").where("status", "==", "PENDING");
+    } else if (user.role !== "SUPER_ADMIN") {
+      query = query.where("userId", "==", user.id);
     }
 
-    const approvals = await prisma.approval.findMany({
-      where,
-      include: {
-        report: { include: { department: true } },
-        approver: { select: { id: true, name: true, email: true, role: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    res.json(approvals);
+    const snapshot = await query.orderBy("createdAt", "desc").get();
+    const approvals = snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+
+    const enriched = await Promise.all(
+      approvals.map(async (a: any) => {
+        const result: any = { ...a };
+        if (a.reportId) {
+          const reportDoc = await db.collection("reports").doc(a.reportId).get();
+          if (reportDoc.exists) {
+            const rd = reportDoc.data()!;
+            let dept = null;
+            if (rd.departmentId) {
+              const deptDoc = await db.collection("departments").doc(rd.departmentId).get();
+              dept = deptDoc.exists ? { id: deptDoc.id, ...deptDoc.data() } : null;
+            }
+            result.report = { id: reportDoc.id, ...rd, department: dept };
+          }
+        }
+        if (a.userId) {
+          const userDoc = await db.collection("users").doc(a.userId).get();
+          if (userDoc.exists) {
+            const ud = userDoc.data()!;
+            result.approver = { id: userDoc.id, name: ud.name, email: ud.email, role: ud.role };
+          }
+        }
+        return result;
+      })
+    );
+
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch approvals" });
   }
 });
 
-router.get("/:id", authenticate, enforceDepartmentScope, async (req: Request, res: Response) => {
+router.get("/:id", async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const approval = await prisma.approval.findUnique({
-      where: { id },
-      include: {
-        report: { include: { department: true } },
-        approver: { select: { id: true, name: true, email: true, role: true } },
-      },
-    });
+    const db = getDb();
+    const doc = await db.collection("approvals").doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Approval not found" });
 
-    if (!approval) {
-      res.status(404).json({ error: "Approval not found" });
-      return;
+    const approval = { id: doc.id, ...doc.data() } as any;
+    if (approval.reportId) {
+      const reportDoc = await db.collection("reports").doc(approval.reportId).get();
+      if (reportDoc.exists) {
+        const rd = reportDoc.data()!;
+        let dept = null;
+        if (rd.departmentId) {
+          const deptDoc = await db.collection("departments").doc(rd.departmentId).get();
+          dept = deptDoc.exists ? { id: deptDoc.id, ...deptDoc.data() } : null;
+        }
+        approval.report = { id: reportDoc.id, ...rd, department: dept };
+      }
+    }
+    if (approval.userId) {
+      const userDoc = await db.collection("users").doc(approval.userId).get();
+      if (userDoc.exists) {
+        const ud = userDoc.data()!;
+        approval.approver = { id: userDoc.id, name: ud.name, email: ud.email, role: ud.role };
+      }
     }
 
     res.json(approval);
@@ -63,73 +89,52 @@ router.get("/:id", authenticate, enforceDepartmentScope, async (req: Request, re
   }
 });
 
-router.post("/", authenticate, enforceDepartmentScope, async (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   try {
+    const db = getDb();
     const { reportId, level, comment } = req.body;
+    if (!reportId || !level) return res.status(400).json({ error: "ReportId and level are required" });
 
-    if (!reportId || !level) {
-      res.status(400).json({ error: "ReportId and level are required" });
-      return;
-    }
-
-    const report = await prisma.report.findUnique({ where: { id: reportId } });
-    if (!report) {
-      res.status(404).json({ error: "Report not found" });
-      return;
-    }
+    const reportDoc = await db.collection("reports").doc(reportId).get();
+    if (!reportDoc.exists) return res.status(404).json({ error: "Report not found" });
 
     const user = (req as any).user;
+    const id = uuid();
+    const data = {
+      reportId, userId: user.id, level, status: "PENDING", comment,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    };
+    await db.collection("approvals").doc(id).set(data);
 
-    const approval = await prisma.approval.create({
-      data: {
-        reportId,
-        userId: user.id,
-        level,
-        status: "PENDING",
-        comment,
-      },
-      include: {
-        report: { include: { department: true } },
-        approver: { select: { id: true, name: true, email: true, role: true } },
-      },
-    });
+    const rd = reportDoc.data()!;
+    let dept = null;
+    if (rd.departmentId) {
+      const deptDoc = await db.collection("departments").doc(rd.departmentId).get();
+      dept = deptDoc.exists ? { id: deptDoc.id, ...deptDoc.data() } : null;
+    }
 
-    res.status(201).json(approval);
+    res.status(201).json({ id, ...data, report: { id: reportDoc.id, ...rd, department: dept }, approver: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (error) {
     res.status(500).json({ error: "Failed to create approval" });
   }
 });
 
-router.put("/:id/approve", authenticate, enforceDepartmentScope, async (req: Request, res: Response) => {
+router.put("/:id/approve", async (req: Request, res: Response) => {
   try {
+    const db = getDb();
     const { id } = req.params;
     const { comment } = req.body;
 
-    const approval = await prisma.approval.findUnique({
-      where: { id },
-      include: { report: true },
-    });
+    const doc = await db.collection("approvals").doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Approval not found" });
 
-    if (!approval) {
-      res.status(404).json({ error: "Approval not found" });
-      return;
-    }
-
-    if (approval.status !== "PENDING") {
-      res.status(400).json({ error: "Approval is not pending" });
-      return;
-    }
+    const approval = doc.data() as any;
+    if (approval.status !== "PENDING") return res.status(400).json({ error: "Approval is not pending" });
 
     const user = (req as any).user;
 
-    const updatedApproval = await prisma.approval.update({
-      where: { id },
-      data: {
-        status: "APPROVED",
-        comment,
-        approvedAt: new Date(),
-      },
-      include: { report: true },
+    await db.collection("approvals").doc(id).update({
+      status: "APPROVED", comment, approvedAt: new Date().toISOString(), updatedAt: new Date().toISOString()
     });
 
     const currentLevelIndex = approvalLevels.indexOf(approval.level);
@@ -139,78 +144,41 @@ router.put("/:id/approve", authenticate, enforceDepartmentScope, async (req: Req
       const nextLevel = approvalLevels[nextLevelIndex];
 
       if (nextLevel === "LOCKED") {
-        await prisma.report.update({
-          where: { id: approval.reportId },
-          data: { status: "LOCKED", lockedAt: new Date() },
-        });
+        await db.collection("reports").doc(approval.reportId).update({ status: "LOCKED", updatedAt: new Date().toISOString() });
       } else {
-        const nextApproverRole = nextLevel === "VP" ? "VICE_PRINCIPAL" : nextLevel;
-
-        const nextApprover = await prisma.user.findFirst({
-          where: { role: nextApproverRole },
-        });
-
-        if (nextApprover) {
-          await prisma.approval.create({
-            data: {
-              reportId: approval.reportId,
-              userId: nextApprover.id,
-              level: nextLevel,
-              status: "PENDING",
-            },
-          });
-        }
-
-        await prisma.report.update({
-          where: { id: approval.reportId },
-          data: { status: "IN_REVIEW" },
+        const nextApprovalId = uuid();
+        await db.collection("approvals").doc(nextApprovalId).set({
+          reportId: approval.reportId, userId: user.id, level: nextLevel, status: "PENDING", comment: `Auto-created after ${approval.level} approval`,
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         });
       }
     }
 
-    res.json(updatedApproval);
+    res.json({ message: "Approval processed successfully" });
   } catch (error) {
     res.status(500).json({ error: "Failed to approve" });
   }
 });
 
-router.put("/:id/reject", authenticate, enforceDepartmentScope, async (req: Request, res: Response) => {
+router.put("/:id/reject", async (req: Request, res: Response) => {
   try {
+    const db = getDb();
     const { id } = req.params;
     const { comment } = req.body;
 
-    if (!comment) {
-      res.status(400).json({ error: "Rejection comment is required" });
-      return;
-    }
+    const doc = await db.collection("approvals").doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Approval not found" });
 
-    const approval = await prisma.approval.findUnique({ where: { id } });
-    if (!approval) {
-      res.status(404).json({ error: "Approval not found" });
-      return;
-    }
+    const approval = doc.data() as any;
+    if (approval.status !== "PENDING") return res.status(400).json({ error: "Approval is not pending" });
 
-    if (approval.status !== "PENDING") {
-      res.status(400).json({ error: "Approval is not pending" });
-      return;
-    }
-
-    const updatedApproval = await prisma.approval.update({
-      where: { id },
-      data: {
-        status: "REJECTED",
-        comment,
-        approvedAt: new Date(),
-      },
-      include: { report: true },
+    await db.collection("approvals").doc(id).update({
+      status: "REJECTED", comment, updatedAt: new Date().toISOString()
     });
 
-    await prisma.report.update({
-      where: { id: approval.reportId },
-      data: { status: "REJECTED" },
-    });
+    await db.collection("reports").doc(approval.reportId).update({ status: "DRAFT", updatedAt: new Date().toISOString() });
 
-    res.json(updatedApproval);
+    res.json({ message: "Approval rejected" });
   } catch (error) {
     res.status(500).json({ error: "Failed to reject" });
   }

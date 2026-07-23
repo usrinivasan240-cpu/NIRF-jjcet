@@ -1,64 +1,64 @@
 import { Router, Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
-import { authenticate, enforceDepartmentScope } from "../middleware/auth";
+import { getDb } from "../config/firebase";
+import { v4 as uuid } from "uuid";
 
 const router = Router();
-const prisma = new PrismaClient();
 
-router.get("/", authenticate, enforceDepartmentScope, async (req: Request, res: Response) => {
+router.get("/", async (req: Request, res: Response) => {
   try {
     const departmentScope = (req as any).departmentScope;
-    const where: any = {};
+    const db = getDb();
 
+    let query: FirebaseFirestore.Query = db.collection("documents");
     if (departmentScope) {
-      where.departmentId = departmentScope;
+      query = query.where("departmentId", "==", departmentScope);
     }
 
-    const documents = await prisma.document.findMany({
-      where,
-      include: { department: true, uploader: { select: { id: true, name: true, email: true } } },
-      orderBy: { createdAt: "desc" },
-    });
+    const snapshot = await query.orderBy("createdAt", "desc").get();
+    const documents = snapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    }));
+
     res.json(documents);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch documents" });
   }
 });
 
-router.get("/:id", authenticate, enforceDepartmentScope, async (req: Request, res: Response) => {
+router.get("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const document = await prisma.document.findUnique({
-      where: { id },
-      include: { department: true, uploader: { select: { id: true, name: true, email: true } } },
-    });
+    const db = getDb();
 
-    if (!document) {
+    const doc = await db.collection("documents").doc(id).get();
+    if (!doc.exists) {
       res.status(404).json({ error: "Document not found" });
       return;
     }
 
     const departmentScope = (req as any).departmentScope;
-    if (departmentScope && document.departmentId !== departmentScope) {
+    if (departmentScope && doc.data()?.departmentId !== departmentScope) {
       res.status(403).json({ error: "Access denied" });
       return;
     }
 
-    res.json(document);
+    res.json({ id: doc.id, ...doc.data() });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch document" });
   }
 });
 
-router.post("/", authenticate, enforceDepartmentScope, async (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   try {
-    const { title, description, fileName, fileUrl, fileType, fileSize, category, departmentId } = req.body;
+    const { title, description, fileName, fileUrl, fileType, fileSize, departmentId } = req.body;
 
     if (!title || !fileName || !fileUrl || !departmentId) {
       res.status(400).json({ error: "Title, fileName, fileUrl, and departmentId are required" });
       return;
     }
 
+    const db = getDb();
     const departmentScope = (req as any).departmentScope;
     if (departmentScope && departmentId !== departmentScope) {
       res.status(403).json({ error: "Cannot upload document to another department" });
@@ -66,83 +66,46 @@ router.post("/", authenticate, enforceDepartmentScope, async (req: Request, res:
     }
 
     const user = (req as any).user;
+    const id = uuid();
 
-    const document = await prisma.document.create({
-      data: {
-        title,
-        description,
-        fileName,
-        fileUrl,
-        fileType,
-        fileSize: fileSize ? parseInt(fileSize) : null,
-        category,
-        departmentId,
-        uploaderId: user.id,
-      },
-      include: { department: true, uploader: { select: { id: true, name: true, email: true } } },
-    });
+    const documentData = {
+      title,
+      description: description || null,
+      fileName,
+      fileUrl,
+      fileType: fileType || null,
+      fileSize: fileSize ? parseInt(fileSize) : null,
+      departmentId,
+      uploadedBy: user.id,
+      createdAt: new Date().toISOString(),
+    };
 
-    res.status(201).json(document);
+    await db.collection("documents").doc(id).set(documentData);
+
+    res.status(201).json({ id, ...documentData });
   } catch (error) {
     res.status(500).json({ error: "Failed to create document" });
   }
 });
 
-router.put("/:id", authenticate, enforceDepartmentScope, async (req: Request, res: Response) => {
+router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, description, fileName, fileUrl, fileType, fileSize, category, departmentId } = req.body;
+    const db = getDb();
 
-    const existing = await prisma.document.findUnique({ where: { id } });
-    if (!existing) {
+    const doc = await db.collection("documents").doc(id).get();
+    if (!doc.exists) {
       res.status(404).json({ error: "Document not found" });
       return;
     }
 
     const departmentScope = (req as any).departmentScope;
-    if (departmentScope && existing.departmentId !== departmentScope) {
+    if (departmentScope && doc.data()?.departmentId !== departmentScope) {
       res.status(403).json({ error: "Access denied" });
       return;
     }
 
-    const document = await prisma.document.update({
-      where: { id },
-      data: {
-        title,
-        description,
-        fileName,
-        fileUrl,
-        fileType,
-        fileSize: fileSize ? parseInt(fileSize) : undefined,
-        category,
-        departmentId,
-      },
-      include: { department: true, uploader: { select: { id: true, name: true, email: true } } },
-    });
-
-    res.json(document);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to update document" });
-  }
-});
-
-router.delete("/:id", authenticate, enforceDepartmentScope, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-
-    const existing = await prisma.document.findUnique({ where: { id } });
-    if (!existing) {
-      res.status(404).json({ error: "Document not found" });
-      return;
-    }
-
-    const departmentScope = (req as any).departmentScope;
-    if (departmentScope && existing.departmentId !== departmentScope) {
-      res.status(403).json({ error: "Access denied" });
-      return;
-    }
-
-    await prisma.document.delete({ where: { id } });
+    await db.collection("documents").doc(id).delete();
     res.json({ message: "Document deleted successfully" });
   } catch (error) {
     res.status(500).json({ error: "Failed to delete document" });
