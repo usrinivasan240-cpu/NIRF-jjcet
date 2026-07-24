@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuthStore } from "@/store";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
@@ -18,6 +19,7 @@ const quickLogins = [
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login: authLogin } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,10 +32,11 @@ export default function LoginPage() {
       const res = await fetch(`${API}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, password: pw }) });
       const text = await res.text();
       let data;
-      try { data = JSON.parse(text); } catch { setError("Server returned: " + text.substring(0, 200)); setLoading(false); return; }
+      try { data = JSON.parse(text); } catch { setError("Server error"); setLoading(false); return; }
       const token = data.data?.token || data.token;
       const user = data.data?.user || data.user;
       if (token) {
+        authLogin(user, token);
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(user));
         router.push("/dashboard");
