@@ -1,0 +1,859 @@
+================================================================================
+          NIRF ERP PRO — COMPLETE PROJECT ANALYSIS & TECHNICAL DOCUMENTATION
+================================================================================
+                          Generated: 24 July 2026
+
+================================================================================
+1. FRONTEND FRAMEWORK
+================================================================================
+Next.js 14.2.21 (App Router) with React 18.3.1
+- File: package.json
+
+================================================================================
+2. BACKEND FRAMEWORK
+================================================================================
+Next.js API Routes via a catch-all handler at src/app/api/[...path]/route.ts
+Express.js 4.21.0 exists in src/lib/backend/ but is NOT active in production.
+The primary backend is the Next.js serverless catch-all route.
+
+================================================================================
+3. PROGRAMMING LANGUAGE
+================================================================================
+TypeScript 5 across the entire project.
+- File: package.json, tsconfig.json
+
+================================================================================
+4. DATABASE
+================================================================================
+Google Cloud Firestore (NoSQL document database).
+- Project ID: jjcet-nirf-cdefd
+- Client SDK: firebase@11.0.0 (src/lib/firebase.ts)
+- Admin SDK: firebase-admin@12.0.0 (src/lib/backend/config/firebase.ts)
+
+================================================================================
+5. ORM
+================================================================================
+No ORM. Direct Firestore SDK calls using getDocs, getDoc, setDoc, updateDoc,
+deleteDoc, collection, query, where, orderBy.
+
+================================================================================
+6. COMPLETE PROJECT FOLDER STRUCTURE
+================================================================================
+
+NIRF/
+├── .env.local
+├── firestore.rules
+├── next.config.mjs
+├── package.json
+├── postcss.config.mjs
+├── tailwind.config.ts
+├── tsconfig.json
+├── public/
+│   └── images/jjcet-logo.png
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx                          # Root layout (Inter font)
+│   │   ├── page.tsx                            # Redirects to /login
+│   │   ├── globals.css
+│   │   ├── (auth)/
+│   │   │   ├── login/page.tsx                  # Login page
+│   │   │   └── forgot-password/                # (empty)
+│   │   ├── (dashboard)/
+│   │   │   ├── dashboard/page.tsx              # Dashboard home
+│   │   │   ├── analytics/page.tsx
+│   │   │   ├── approvals/page.tsx              # Approval workflow
+│   │   │   ├── departments/page.tsx
+│   │   │   ├── documents/page.tsx
+│   │   │   ├── events/page.tsx
+│   │   │   ├── faculty/page.tsx
+│   │   │   ├── notifications/page.tsx
+│   │   │   ├── patents/page.tsx
+│   │   │   ├── publications/page.tsx
+│   │   │   ├── reports/page.tsx                # NIRF Report Generator
+│   │   │   ├── research/page.tsx
+│   │   │   ├── settings/page.tsx
+│   │   │   ├── signatures/page.tsx
+│   │   │   ├── students/page.tsx
+│   │   │   ├── targets/page.tsx
+│   │   │   └── users/page.tsx
+│   │   ├── nirf-report/
+│   │   │   └── page.tsx                        # Standalone NIRF Report
+│   │   ├── seed/
+│   │   │   └── page.tsx                        # Client-side DB seeding
+│   │   └── api/
+│   │       ├── [...path]/route.ts              # Catch-all API (453 lines)
+│   │       └── seed/route.ts                   # Server-side seed API
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── DashboardLayout.tsx
+│   │   │   ├── Header.tsx
+│   │   │   └── Sidebar.tsx
+│   │   ├── shared/
+│   │   │   └── StatsCard.tsx
+│   │   └── ui/
+│   │       ├── badge.tsx, button.tsx, card.tsx, dialog.tsx
+│   │       ├── input.tsx, label.tsx, select.tsx
+│   ├── lib/
+│   │   ├── api.ts                              # ApiClient class
+│   │   ├── firebase.ts                         # Client Firebase init
+│   │   ├── utils.ts
+│   │   └── backend/
+│   │       ├── config/
+│   │       │   ├── firebase.ts                 # Admin SDK init
+│   │       │   └── index.ts                    # Config (JWT, port, cors)
+│   │       ├── middleware/
+│   │       │   ├── auth.ts                     # JWT auth + dept scoping
+│   │       │   └── errorHandler.ts
+│   │       ├── types/index.ts                  # Role enum, JwtPayload
+│   │       └── routes/                         # Express routes (NOT active)
+│   │           ├── auth.ts, faculty.ts, departments.ts
+│   │           ├── students.ts, publications.ts, patents.ts
+│   │           ├── research.ts, targets.ts, reports.ts
+│   │           ├── approvals.ts, signatures.ts, documents.ts
+│   │           ├── events.ts, users.ts, notifications.ts
+│   │           └── analytics.ts
+│   ├── store/index.ts                          # Zustand auth + app store
+│   └── types/index.ts                          # Role enum
+
+================================================================================
+7. ALL FIRESTORE COLLECTIONS (TABLES) WITH COLUMNS AND RELATIONSHIPS
+================================================================================
+
+--- departments ---
+| Field        | Type     |
+|--------------|----------|
+| id           | string   |
+| name         | string   |
+| code         | string   |
+| description  | string   |
+| headId       | string   |
+| createdAt    | timestamp|
+| updatedAt    | timestamp|
+
+--- faculties ---
+| Field           | Type     |
+|-----------------|----------|
+| id              | string   |
+| name            | string   |
+| email           | string   |
+| phone           | string   |
+| designation     | string   |
+| qualification   | string   |
+| experience      | string   |
+| specialization  | string   |
+| departmentId    | string   | FK → departments
+| employeeId      | string   |
+| createdAt       | timestamp|
+| updatedAt       | timestamp|
+
+--- students ---
+| Field        | Type     |
+|--------------|----------|
+| id           | string   |
+| name         | string   |
+| email        | string   |
+| rollNumber   | string   |
+| departmentId | string   | FK → departments
+| category     | string   |
+| title        | string   |
+| year         | string   |
+| guideName    | string   |
+| status       | string   |
+| createdAt    | timestamp|
+| updatedAt    | timestamp|
+
+--- publications ---
+| Field        | Type     |
+|--------------|----------|
+| id           | string   |
+| title        | string   |
+| authors      | string   |
+| journal      | string   |
+| type         | string   |
+| publisher    | string   |
+| citationCount| number   |
+| status       | string   |
+| facultyId    | string   | FK → faculties
+| departmentId | string   | FK → departments
+| createdAt    | timestamp|
+| updatedAt    | timestamp|
+
+--- patents ---
+| Field        | Type     |
+|--------------|----------|
+| id           | string   |
+| title        | string   |
+| patentNumber | string   |
+| country      | string   |
+| status       | string   |
+| isGranted    | boolean  |
+| filingDate   | string   |
+| grantDate    | string   |
+| inventors    | string   |
+| departmentId | string   | FK → departments
+| facultyId    | string   | FK → faculties
+| createdAt    | timestamp|
+| updatedAt    | timestamp|
+
+--- research ---
+| Field          | Type     |
+|----------------|----------|
+| id             | string   |
+| title          | string   |
+| pi             | string   |
+| coPi           | string   |
+| fundingAgency  | string   |
+| amount         | string   |
+| status         | string   |
+| startDate      | string   |
+| endDate        | string   |
+| sanctionedYear | string   |
+| departmentId   | string   | FK → departments
+| facultyId      | string   | FK → faculties
+| createdAt      | timestamp|
+| updatedAt      | timestamp|
+
+--- targets ---
+| Field        | Type     |
+|--------------|----------|
+| id           | string   |
+| category     | string   |
+| yearly       | number   | Target value
+| achieved     | number   | Achieved value
+| year         | string   |
+| departmentId | string   | FK → departments
+| createdAt    | timestamp|
+| updatedAt    | timestamp|
+
+--- reports ---
+| Field        | Type     |
+|--------------|----------|
+| id           | string   |
+| title        | string   |
+| type         | string   |
+| category     | string   |
+| academicYear | string   |
+| status       | string   |
+| currentLevel | string   |
+| content      | string   |
+| config       | object   |
+| departmentId | string   | FK → departments
+| creatorId    | string   | FK → users
+| signatures   | array    |
+| createdAt    | timestamp|
+| updatedAt    | timestamp|
+
+--- approvals ---
+| Field        | Type     |
+|--------------|----------|
+| id           | string   |
+| reportId     | string   | FK → reports
+| userId       | string   | FK → users
+| level        | string   |
+| status       | string   |
+| comment      | string   |
+| approvedAt   | timestamp|
+| createdAt    | timestamp|
+
+--- signatures ---
+| Field           | Type     |
+|-----------------|----------|
+| id              | string   |
+| userId          | string   | FK → users
+| reportId        | string   | FK → reports
+| signatureImage  | string   | base64 data URL
+| signedAt        | timestamp|
+| createdAt       | timestamp|
+
+--- events ---
+| Field        | Type     |
+|--------------|----------|
+| id           | string   |
+| title        | string   |
+| type         | string   |
+| date         | string   |
+| endDate      | string   |
+| venue        | string   |
+| organizer    | string   |
+| participants | string   |
+| status       | string   |
+| departmentId | string   | FK → departments
+| createdAt    | timestamp|
+| updatedAt    | timestamp|
+
+--- documents ---
+| Field        | Type     |
+|--------------|----------|
+| id           | string   |
+| title        | string   |
+| description  | string   |
+| fileName     | string   |
+| fileUrl      | string   |
+| fileType     | string   |
+| fileSize     | number   |
+| departmentId | string   | FK → departments
+| uploadedBy   | string   | FK → users
+| createdAt    | timestamp|
+
+--- notifications ---
+| Field        | Type     |
+|--------------|----------|
+| id           | string   |
+| title        | string   |
+| message      | string   |
+| type         | string   |
+| read         | boolean  |
+| userId       | string   | FK → users
+| createdAt    | timestamp|
+| updatedAt    | timestamp|
+
+--- users ---
+| Field        | Type     |
+|--------------|----------|
+| id           | string   |
+| name         | string   |
+| email        | string   |
+| password     | string   | bcrypt hashed
+| role         | string   |
+| departmentId | string   | FK → departments
+| createdAt    | timestamp|
+| updatedAt    | timestamp|
+
+--- settings ---
+| Field          | Type     |
+|----------------|----------|
+| id (doc:"global")| —      |
+| collegeName    | string   |
+| collegeCode    | string   |
+| address        | string   |
+| phone          | string   |
+| email          | string   |
+| website        | string   |
+| academicYear   | string   |
+| currentSemester| string   |
+
+--- RELATIONSHIPS ---
+departments ← faculties.departmentId
+departments ← students.departmentId
+departments ← publications.departmentId
+departments ← patents.departmentId
+departments ← research.departmentId
+departments ← targets.departmentId
+departments ← events.departmentId
+departments ← documents.departmentId
+departments ← reports.departmentId
+faculties ← publications.facultyId
+faculties ← patents.facultyId
+faculties ← research.facultyId
+users ← reports.creatorId
+users ← approvals.userId
+users ← signatures.userId
+users ← documents.uploadedBy
+users ← notifications.userId
+reports ← approvals.reportId
+reports ← signatures.reportId
+
+================================================================================
+8. TABLES STORING FACULTY DATA
+================================================================================
+faculties — name, email, phone, designation, qualification, experience,
+            specialization, departmentId, employeeId.
+
+================================================================================
+9. TABLES STORING DEPARTMENT DATA
+================================================================================
+departments — name, code, description, headId.
+
+================================================================================
+10. TABLES STORING STUDENT DATA
+================================================================================
+students — name, email, rollNumber, departmentId, category, title, year,
+           guideName, status.
+
+================================================================================
+11. TABLES STORING PUBLICATIONS
+================================================================================
+publications — title, authors, journal, type, publisher, citationCount,
+               status, facultyId, departmentId.
+
+================================================================================
+12. TABLES STORING PATENTS
+================================================================================
+patents — title, patentNumber, country, status, isGranted, filingDate,
+          grantDate, inventors, departmentId, facultyId.
+
+================================================================================
+13. TABLES STORING CONSULTANCY
+================================================================================
+NO dedicated consultancy collection. Consultancy data only appears inside
+pre-seeded report text content. There is no consultancy CRUD or API.
+
+================================================================================
+14. TABLES STORING FUNDED PROJECTS
+================================================================================
+research — title, pi, coPi, fundingAgency, amount, status, startDate,
+           endDate, sanctionedYear, departmentId, facultyId.
+
+================================================================================
+15. TABLES STORING PLACEMENT DATA
+================================================================================
+NO dedicated placements collection. Placement data only exists inside seed
+report text content. No placements collection or API.
+
+================================================================================
+16. TABLES STORING HIGHER STUDIES
+================================================================================
+NO dedicated higher studies collection. Not tracked anywhere in the database.
+
+================================================================================
+17. TABLES STORING NIRF DATA
+================================================================================
+NIRF data is spread across multiple collections:
+- targets — category-wise yearly targets and achievements
+- reports — NIRF reports with type: "nirf"
+- The NIRF score is calculated dynamically in the client-side report pages
+  using formulas from faculties, publications, patents, and targets.
+
+================================================================================
+18. TABLES STORING DEPARTMENT TARGETS
+================================================================================
+targets — category (e.g., "Publications"), yearly (target value),
+          achieved (achieved value), year (academic year), departmentId.
+
+================================================================================
+19. DEPARTMENT TARGETS DESIGN ASSESSMENT & RECOMMENDATION
+================================================================================
+Targets ARE implemented in a basic form but are too simple for proper NIRF:
+
+Current Limitations:
+- Only one numeric yearly and achieved per category per department per year
+- No sub-metric breakdown (e.g., TLR has sub-metrics: FSR, FQR, ESP)
+- No historical year-over-year comparison
+- No linkage to actual data collections
+
+Recommended Design:
+  collection: "targets"
+  {
+    id: string,
+    departmentId: string,
+    academicYear: string,          // "2024-25"
+    parameter: string,             // "TLR" | "RPC" | "GO" | "OI" | "PR"
+    subMetric: string,             // "FSR" | "FQR" | "ESP" | "PU" | "PP"
+    targetValue: number,
+    achievedValue: number,
+    unit: string,                  // "ratio" | "percentage" | "count"
+    weight: number,                // NIRF weightage
+    calculatedFrom: string,        // "auto" | "manual"
+    sourceCollection: string,      // which collection to auto-calculate from
+    status: string,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  }
+
+================================================================================
+20. HOW TARGET VALUES ARE CURRENTLY STORED
+================================================================================
+Stored in the targets collection as flat documents:
+  {
+    "category": "Publications",
+    "yearly": 50,
+    "achieved": 10,
+    "year": "2024-25",
+    "departmentId": "dept-it-001"
+  }
+The fields are yearly (target) and achieved (actual).
+
+================================================================================
+21. HOW ACHIEVED VALUES SHOULD BE CALCULATIONS
+================================================================================
+Currently achieved is manually entered. They should be auto-calculated:
+- Publications achieved = COUNT(publications WHERE deptId=X AND status='published')
+- Patents achieved = COUNT(patents WHERE deptId=X AND status='granted')
+- Research = COUNT(research WHERE deptId=X AND sanctionedYear=current)
+- Events = COUNT(events WHERE deptId=X AND date IN currentYear)
+- NIRF Scores = formula-based: TLR(30%), RPC(30%), GO(20%), OI(10%), PR(10%)
+
+================================================================================
+22. APIs ALREADY EXISTING FOR REPORTS
+================================================================================
+| Method | Endpoint                      | Function              |
+|--------|-------------------------------|-----------------------|
+| GET    | /api/reports                  | List all reports      |
+| GET    | /api/reports/:id              | Get single report     |
+| POST   | /api/reports/generate         | Create new report     |
+| PUT    | /api/reports/:id              | Update report         |
+| DELETE | /api/reports/:id              | Delete report         |
+| POST   | /api/reports/:id/submit       | Submit report         |
+| GET    | /api/reports/templates        | Get template list     |
+
+================================================================================
+23. APIs ALREADY EXISTING FOR DEPARTMENTS
+================================================================================
+| Method | Endpoint           |
+|--------|--------------------|
+| GET    | /api/departments   |
+| GET    | /api/departments/:id |
+| POST   | /api/departments   |
+| PUT    | /api/departments/:id |
+| DELETE | /api/departments/:id |
+
+================================================================================
+24. APIs ALREADY EXISTING FOR FACULTY
+================================================================================
+| Method | Endpoint          |
+|--------|-------------------|
+| GET    | /api/faculties    |
+| GET    | /api/faculties/:id |
+| POST   | /api/faculties    |
+| PUT    | /api/faculties/:id |
+| DELETE | /api/faculties/:id |
+
+Also accessible via /api/faculty (alias).
+
+================================================================================
+25. APIs ALREADY EXISTING FOR STUDENTS
+================================================================================
+| Method | Endpoint          |
+|--------|-------------------|
+| GET    | /api/students     |
+| GET    | /api/students/:id |
+| POST   | /api/students     |
+| PUT    | /api/students/:id |
+| DELETE | /api/students/:id |
+
+Other existing APIs: publications, patents, research, events, targets,
+documents, signatures, notifications, users, analytics, approvals, auth,
+settings.
+
+================================================================================
+26. AUTHENTICATION IMPLEMENTATION
+================================================================================
+- JWT-based (jsonwebtoken@9.0.2)
+- Login: POST /api/auth/login → validates mockUsers array, then Firestore
+- Token signed with secret, expires in 24h
+- Token stored in localStorage as "token" and "user"
+- useAuthStore (Zustand with persist) manages auth state
+- DashboardLayout checks isAuthenticated, redirects to /login if false
+- All API calls include Authorization: Bearer <token> header
+
+================================================================================
+27. ROLE-BASED ACCESS CONTROL
+================================================================================
+- 5 roles in src/types/index.ts:
+  SUPER_ADMIN, PRINCIPAL, VICE_PRINCIPAL, HOD, DEPARTMENT_STAFF
+
+Department scoping:
+- SUPER_ADMIN, PRINCIPAL, VICE_PRINCIPAL → see ALL departments
+- HOD, DEPARTMENT_STAFF → restricted to their departmentId
+
+Frontend sidebar filters menu items by role.
+
+================================================================================
+28. ROLES THAT CURRENTLY EXIST
+================================================================================
+| Role              | Description                | Login                |
+|-------------------|----------------------------|----------------------|
+| SUPER_ADMIN       | Full access                | admin/admin123       |
+| PRINCIPAL         | Approves at PRINCIPAL      | principal/principal123|
+| VICE_PRINCIPAL    | Approves at VP level       | vp/vp123             |
+| HOD               | Dept-scoped, approves HOD  | hod/hod123           |
+| DEPARTMENT_STAFF  | Dept-scoped, creates       | staff/staff123       |
+
+================================================================================
+29. APPROVAL WORKFLOW
+================================================================================
+Levels: STAFF → HOD → VP → PRINCIPAL → LOCKED
+
+Flow:
+1. Staff creates report (status: DRAFT, currentLevel: STAFF)
+2. Staff submits report (status: SUBMITTED)
+3. Approval record created at STAFF level
+4. STAFF approves → auto-creates HOD approval → currentLevel = HOD
+5. HOD approves → auto-creates VP approval → currentLevel = VP
+6. VP approves → auto-creates PRINCIPAL approval → currentLevel = PRINCIPAL
+7. PRINCIPAL approves → status = LOCKED (final)
+8. Reject at any level → report reverts to DRAFT
+9. Locked reports cannot be edited or deleted
+
+================================================================================
+30. DIGITAL SIGNATURES
+================================================================================
+- signatures collection: userId, reportId, signatureImage (base64), signedAt
+- Currently basic — stores pre-made base64 images
+- NIRF report page renders signature blocks with hardcoded names
+- Reports page renders configurable signature names from ReportConfig
+- No real e-signature pad or cryptographic signing
+
+================================================================================
+31. UPLOADED FILES STORAGE
+================================================================================
+- Documents stored in Firestore documents collection with metadata
+- No Firebase Storage integration
+- No file upload UI components — documents page uses URL input
+
+================================================================================
+32. PDF GENERATION LIBRARY
+================================================================================
+None. No html2pdf, jsPDF, pdfmake, or any PDF library.
+PDF generation done via browser print dialog:
+- printReport() opens new window with HTML, calls window.print()
+
+================================================================================
+33. EXCEL EXPORT LIBRARY
+================================================================================
+None. No xlsx, exceljs, or Excel library.
+Export is manual CSV generation using Blob.
+
+================================================================================
+34. CHART LIBRARY
+================================================================================
+Recharts 2.12.0 is installed but NOT actually used.
+NIRF report pages use custom inline SVG for:
+- BarChart component (horizontal bar)
+- TrendChart component (line chart with SVG)
+
+================================================================================
+35. UI COMPONENT FRAMEWORK
+================================================================================
+shadcn/ui components (manually copied into src/components/ui/):
+- button, card, badge, dialog, input, label, select
+Styled with Tailwind CSS 3.4.4.
+Uses class-variance-authority and clsx/tailwind-merge.
+
+================================================================================
+36. TABLE COMPONENT
+================================================================================
+No dedicated table component. Tables built with raw HTML <table> elements
+using Tailwind CSS classes.
+
+================================================================================
+37. FORM LIBRARY
+================================================================================
+No form library (no react-hook-form, formik, etc.).
+Forms use plain React state with useState for each field.
+
+================================================================================
+38. HOW REPORTS SHOULD BE GENERATED
+================================================================================
+Currently: Client-side — all Firestore data fetched in browser, scores
+computed in browser, report rendered as React JSX.
+
+Recommended: Server-side API — a dedicated /api/nirf/calculate endpoint
+should fetch data server-side using firebase-admin, compute NIRF scores,
+return structured JSON, client renders from that data.
+
+================================================================================
+39. REPORT TEMPLATES THAT ALREADY EXIST
+================================================================================
+staff: publications, patents, research, events, monthly_progress,
+       semester_progress, annual_performance, target_achievement,
+       pending_activities
+
+department: complete_report, faculty_performance, department_publications,
+            department_patents, department_research, student_achievements,
+            placement_statistics, target_vs_achievement, monthly_report,
+            semester_report, annual_report
+
+vp: department_comparison, pending_approval, faculty_summary, research_summary,
+    publication_summary, patent_summary, placement_summary, target_analysis,
+    institutional_progress, monthly_institutional, annual_institutional
+
+principal: annual_report, nirf_report, naac_report, nba_report, iqac_report,
+           aicte_report, ugc_report, governing_council, management_report,
+           accreditation_evidence
+
+These are metadata strings only — no actual template rendering functions
+exist for most of them. Only the NIRF report has a visual template.
+
+================================================================================
+40. PRINT LAYOUT
+================================================================================
+Yes, basic print layout exists:
+- nirf-report/page.tsx — opens popup, writes HTML with @page CSS, prints
+- reports/page.tsx — same approach
+- CSS: @page{size:A3 portrait}, print-color-adjust:exact, font 9px
+- Report rendered at fixed width (794px) inside print view
+
+================================================================================
+41. PROBLEMS IN CURRENT REPORT GENERATION MODULE
+================================================================================
+
+1. Client-side only — ALL Firestore data fetched in browser (N+1 queries)
+2. No server-side API for NIRF calculation
+3. NIRF formulas are simplistic — not aligned with actual NIRF methodology
+4. No data caching — every generation re-fetches all collections
+5. No PDF generation — relies on browser print dialog
+6. Duplicate code — nirf-report and reports pages have ~400 lines duplicated
+7. Hardcoded JJCET branding — college name, logo, address hardcoded
+8. No data validation — Zod is installed but never used
+9. Signatures are fake — hardcoded names, no digital signature integration
+10. No report versioning — no audit trail of changes
+11. Trend data is fabricated — historical scores are Math.max(total - X, Y)
+12. No export to PDF/DOCX — only CSV export exists
+13. ReportConfig not typed strictly — uses any extensively
+14. Firestore rules are wide open — allow read, write: if true
+
+================================================================================
+42. RECOMMENDED IMPROVEMENTS BEFORE BUILDING NIRF REPORT GENERATOR
+================================================================================
+
+1. Create a server-side API (/api/nirf/calculate) for score computation
+2. Define NIRF parameter mapping — map sub-metrics to collection fields
+3. Add missing collections: placements, higher_studies, consultancy, alumni
+4. Add historical year data for trend analysis
+5. Implement proper PDF generation (@react-pdf/renderer or puppeteer)
+6. Add data validation with Zod for all report inputs
+7. Fix Firestore security rules — implement auth-based rules
+8. Consolidate duplicate NIRF logic into single utility module
+9. Make college branding configurable via settings collection
+10. Add report scheduling and automated data aggregation
+11. Implement caching for expensive calculations
+12. Add proper error handling and loading states
+13. Type all Firestore documents with TypeScript interfaces
+
+================================================================================
+43. BEST ARCHITECTURE FOR DYNAMIC DATABASE-DRIVEN REPORT GENERATOR
+================================================================================
+
+FRONTEND (Next.js App Router)
+  ├── Report Builder (Config Form)
+  ├── Report Viewer/Renderer (Dynamic JSX from JSON)
+  └── Report Config State (Zustand)
+
+        ↓ API Call ↓
+
+NEXT.JS API ROUTES
+  ├── /api/nirf/calculate
+  ├── /api/reports/generate
+  ├── /api/reports/templates
+  └── /api/reports/export-pdf
+
+        ↓
+
+REPORT ENGINE (lib/report-engine.ts)
+  ├── Data Fetcher (firebase-admin)
+  │   → Fetches all collections server-side
+  ├── NIRF Calculator
+  │   → Computes TLR, RPC, GO, OI, PR scores
+  │   → Uses configurable formulas per parameter
+  ├── Aggregator
+  │   → Groups by department, calculates totals
+  ├── Template Engine
+  │   → Maps data to report section templates
+  └── PDF Renderer
+      → Generates printable PDF
+
+        ↓
+
+FIRESTORE (firebase-admin)
+  departments | faculties | publications | patents
+  research | students | targets | reports | approvals
+  signatures | events | settings
+
+================================================================================
+44. HOW THE REPORT SHOULD FETCH, AGGREGATE, CALCULATE, DISPLAY LIVE DATA
+================================================================================
+
+Step 1 — Fetch (Server-side):
+  const [depts, facs, pubs, pats, res, stus, tgts] = await Promise.all([
+    db.collection("departments").get(),
+    db.collection("faculties").get(),
+    db.collection("publications").where("status","==","published").get(),
+    db.collection("patents").get(),
+    db.collection("research").get(),
+    db.collection("students").get(),
+    db.collection("targets").where("year","==",academicYear).get(),
+  ]);
+
+Step 2 — Aggregate (by department):
+  for (const dept of departments) {
+    const deptFaculty = faculties.filter(f => f.departmentId === dept.id);
+    const deptPubs = publications.filter(p => p.departmentId === dept.id);
+    // ... etc
+  }
+
+Step 3 — Calculate NIRF Scores:
+  TLR (30 marks) — FSR, FQR, ESP sub-metrics
+  RPC (30 marks) — PU, PP, FQ, CC
+  GO (20 marks)  — GUE, GPE, MS, GPH
+  OI (10 marks)  — RD, WD, ES, PCD
+  PR (10 marks)  — RPC, AHS, CC, PE
+
+Step 4 — Return structured JSON:
+  {
+    "academicYear": "2024-25",
+    "institution": {
+      "overall": 72.5,
+      "parameters": { "tlr": 65, "rpc": 42, "go": 72, "oi": 55, "pr": 38 }
+    },
+    "departments": [...],
+    "trends": [...]
+  }
+
+Step 5 — Display:
+  Client receives JSON, passes to NirfReport component which renders
+  the visual report. Print button generates PDF.
+
+================================================================================
+45. COMPLETE TECHNICAL DOCUMENTATION
+================================================================================
+
+--- TECHNOLOGY STACK ---
+| Layer            | Technology               | Version  |
+|------------------|--------------------------|----------|
+| Frontend         | Next.js (App Router)     | 14.2.21  |
+| UI Library       | React                    | 18.3.1   |
+| Language         | TypeScript               | 5.x      |
+| Styling          | Tailwind CSS             | 3.4.4    |
+| UI Components    | shadcn/ui (manual)       | —        |
+| State Management | Zustand                  | 4.5.0    |
+| Charts           | Recharts (unused), SVG   | 2.12.0   |
+| Icons            | Lucide React             | 0.400.0  |
+| Validation       | Zod (unused)             | 3.23.8   |
+| Database         | Google Cloud Firestore   | —        |
+| Auth             | JWT (jsonwebtoken)       | 9.0.2    |
+| Password Hash    | bcryptjs                 | 2.4.3    |
+| Backend Runtime  | Next.js API Routes       | —        |
+| Legacy Backend   | Express.js (not active)  | 4.21.0   |
+
+--- DATABASE ARCHITECTURE ---
+- Type: NoSQL Document Database (Firestore)
+- 15 collections total
+- No relational joins — references via document IDs
+- No transactions used
+- Security rules: Wide open (allow read, write: if true)
+
+--- API ARCHITECTURE ---
+- Single catch-all route: src/app/api/[...path]/route.ts (453 lines)
+- Handles ALL endpoints via path parsing
+- JWT auth on every request
+- Department scoping middleware applied per request
+- No rate limiting, no request validation
+
+--- REPORT FLOW ---
+1. User clicks "Generate Report" on /reports or /nirf-report
+2. Frontend fetches ALL data from Firestore (7 parallel getDocs calls)
+3. NIRF scores computed in browser using hardcoded formulas
+4. Report rendered as React JSX component
+5. Print button opens popup with styled HTML, calls window.print()
+6. Report saved to reports collection with status DRAFT
+7. User submits → status changes to SUBMITTED
+8. Report enters approval workflow
+
+--- APPROVAL FLOW ---
+DRAFT → SUBMITTED → STAFF → HOD → VP → PRINCIPAL → LOCKED
+                   approve  approve  approve   approve
+                   REJECTED → DRAFT (at any level)
+
+--- AUTHENTICATION FLOW ---
+1. User enters credentials on /login
+2. Client POSTs to /api/auth/login
+3. API checks mockUsers, then Firestore users
+4. JWT token returned with user info
+5. Token stored in localStorage + Zustand
+6. DashboardLayout checks auth, redirects if unauthenticated
+7. All API calls include Authorization: Bearer <token>
+
+================================================================================
+                           END OF DOCUMENTATION
+================================================================================
