@@ -3,10 +3,11 @@ node_modules/
 dist/
 *.db
 install_log.txt
+install.log
 server_log.txt
 .env
 backend/serviceAccountKey.json
 backend/prisma/
 *-firebase-adminsdk-*.json
 serviceAccountKey.json
-frontend/serviceAccountKey.json
+frontend/
