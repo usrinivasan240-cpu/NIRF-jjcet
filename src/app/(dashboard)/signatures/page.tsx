@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, doc, setDoc, query, where, limit } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,26 +9,31 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PenTool, Check } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "/api";
+function genId() {
+  return "sig-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
 
 export default function SignaturesPage() {
   const [signature, setSignature] = useState<any>(null);
   const [designation, setDesignation] = useState("");
-  const [sealImage, setSealImage] = useState("");
   const [saved, setSaved] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drawing, setDrawing] = useState(false);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "null") : null;
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
   useEffect(() => {
-    if (token) {
-      fetch(`${API}/signatures/me`, { headers }).then(r => r.json()).then(d => {
-        if (d.success && d.data) { setSignature(d.data); setDesignation(d.data.designation); }
-      }).catch(() => {});
-    }
+    const loadSignature = async () => {
+      try {
+        const snap = await getDocs(query(collection(db, "signatures"), where("userId", "==", user?.id || ""), limit(1)));
+        if (!snap.empty) {
+          const data = snap.docs[0].data();
+          setSignature({ id: snap.docs[0].id, ...data });
+          setDesignation(data.designation || "");
+        }
+      } catch (e) { console.error("Load signature error:", e); }
+    };
+    if (user?.id) loadSignature();
   }, []);
 
   const startDraw = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -69,13 +76,19 @@ export default function SignaturesPage() {
     const img = canvas.toDataURL("image/png");
     if (!designation) { alert("Enter your designation"); return; }
     try {
-      const res = await fetch(`${API}/signatures`, {
-        method: "POST", headers,
-        body: JSON.stringify({ signatureImage: img, designation, sealImage: sealImage || undefined }),
-      });
-      const data = await res.json();
-      if (data.success) { setSignature(data.data); setSaved(true); setTimeout(() => setSaved(false), 2000); }
-    } catch {}
+      const id = signature?.id || genId();
+      const data = {
+        userId: user?.id || "",
+        name: user?.name || "Unknown",
+        signatureImage: img,
+        designation,
+        createdAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, "signatures", id), data, { merge: true });
+      setSignature({ id, ...data });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) { console.error("Save signature error:", e); }
   };
 
   return (
