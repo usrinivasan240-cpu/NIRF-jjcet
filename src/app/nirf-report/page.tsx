@@ -9,6 +9,8 @@ import { Printer, FileText, Loader2 } from "lucide-react";
 
 const LOGO_URL = "/images/jjcet-logo.png";
 
+function safe(v: number) { return isNaN(v) || !isFinite(v) ? 0 : v; }
+
 function getColor(pct: number) {
   if (pct >= 90) return { bg: "#dcfce7", text: "#166534", dot: "#22c55e" };
   if (pct >= 75) return { bg: "#fef9c3", text: "#854d0e", dot: "#eab308" };
@@ -126,11 +128,12 @@ export default function NIRFReportPage() {
     });
 
     const activeRows = deptId ? deptRows.filter(r => r.dept.id === deptId) : deptRows;
-    const instTlr = deptRows.reduce((s, r) => s + r.tlr, 0) / deptRows.length;
-    const instRpc = deptRows.reduce((s, r) => s + r.rpc, 0) / deptRows.length;
-    const instGo = deptRows.reduce((s, r) => s + r.go, 0) / deptRows.length;
-    const instOi = deptRows.reduce((s, r) => s + r.oi, 0) / deptRows.length;
-    const instPr = deptRows.reduce((s, r) => s + r.pr, 0) / deptRows.length;
+    const len = Math.max(deptRows.length, 1);
+    const instTlr = safe(deptRows.reduce((s, r) => s + r.tlr, 0) / len);
+    const instRpc = safe(deptRows.reduce((s, r) => s + r.rpc, 0) / len);
+    const instGo = safe(deptRows.reduce((s, r) => s + r.go, 0) / len);
+    const instOi = safe(deptRows.reduce((s, r) => s + r.oi, 0) / len);
+    const instPr = safe(deptRows.reduce((s, r) => s + r.pr, 0) / len);
     const instTotal = instTlr + instRpc + instGo + instOi + instPr;
 
     const allPubs = publications.filter(p => deptId ? p.departmentId === deptId : true);
@@ -253,37 +256,41 @@ function NIRFReport({ data, reportId, now, user, deptName }: { data: any; report
   const { deptRows, instTlr, instRpc, instGo, instOi, instPr, instTotal,
     allPubs, allPats, allRes, allFac, allStu, allTgt,
     totalTarget, totalAchieved } = data;
+  const tlr = safe(instTlr), rpc = safe(instRpc), go = safe(instGo), oi = safe(instOi), pr = safe(instPr), total = safe(instTotal);
 
   const nirfParams = [
-    { name: "Teaching, Learning & Resources (TLR)", icon: "1", full: 100, obtained: instTlr.toFixed(2), score: instTlr.toFixed(2), weight: 30, weighted: (instTlr * 0.3).toFixed(2) },
-    { name: "Research and Professional Practice (RP)", icon: "2", full: 100, obtained: instRpc.toFixed(2), score: instRpc.toFixed(2), weight: 30, weighted: (instRpc * 0.3).toFixed(2) },
-    { name: "Graduation Outcomes (GO)", icon: "3", full: 100, obtained: instGo.toFixed(2), score: instGo.toFixed(2), weight: 20, weighted: (instGo * 0.2).toFixed(2) },
-    { name: "Outreach and Inclusivity (OI)", icon: "4", full: 100, obtained: instOi.toFixed(2), score: instOi.toFixed(2), weight: 10, weighted: (instOi * 0.1).toFixed(2) },
-    { name: "Perception (PR)", icon: "5", full: 100, obtained: instPr.toFixed(2), score: instPr.toFixed(2), weight: 10, weighted: (instPr * 0.1).toFixed(2) },
+    { name: "Teaching, Learning & Resources (TLR)", icon: "1", full: 100, obtained: tlr.toFixed(2), score: tlr.toFixed(2), weight: 30, weighted: (tlr * 0.3).toFixed(2) },
+    { name: "Research and Professional Practice (RP)", icon: "2", full: 100, obtained: rpc.toFixed(2), score: rpc.toFixed(2), weight: 30, weighted: (rpc * 0.3).toFixed(2) },
+    { name: "Graduation Outcomes (GO)", icon: "3", full: 100, obtained: go.toFixed(2), score: go.toFixed(2), weight: 20, weighted: (go * 0.2).toFixed(2) },
+    { name: "Outreach and Inclusivity (OI)", icon: "4", full: 100, obtained: oi.toFixed(2), score: oi.toFixed(2), weight: 10, weighted: (oi * 0.1).toFixed(2) },
+    { name: "Perception (PR)", icon: "5", full: 100, obtained: pr.toFixed(2), score: pr.toFixed(2), weight: 10, weighted: (pr * 0.1).toFixed(2) },
   ];
-  const totalWeighted = (instTlr * 0.3 + instRpc * 0.3 + instGo * 0.2 + instOi * 0.1 + instPr * 0.1).toFixed(2);
+  const totalWeighted = (tlr * 0.3 + rpc * 0.3 + go * 0.2 + oi * 0.1 + pr * 0.1).toFixed(2);
 
   const trendData = [
-    { year: "2021-22", score: Math.max(instTotal - 40, 50) },
-    { year: "2022-23", score: Math.max(instTotal - 25, 60) },
-    { year: "2023-24", score: Math.max(instTotal - 10, 70) },
-    { year: "2024-25", score: instTotal },
+    { year: "2021-22", score: Math.max(total - 40, 50) },
+    { year: "2022-23", score: Math.max(total - 25, 60) },
+    { year: "2023-24", score: Math.max(total - 10, 70) },
+    { year: "2024-25", score: total },
   ];
 
   const dateStr = now.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
 
   return (
-    <div style={{ padding: 0, maxWidth: "100%", overflow: "hidden" }}>
+    <div style={{ width: "794px", margin: "0 auto", padding: 0, overflow: "hidden", background: "white", fontFamily: "Arial, Helvetica, sans-serif", fontSize: "9px", lineHeight: "1.3", color: "#1a1a1a" }}>
       {/* HEADER */}
-      <div style={{ background: "linear-gradient(135deg, #1e3a8a, #2563eb)", color: "white", padding: "12px 20px", display: "flex", alignItems: "center", gap: "15px" }}>
-        <img src={LOGO_URL} alt="JJCET" style={{ width: "80px", height: "80px", borderRadius: "50%", background: "white", padding: "4px", objectFit: "contain" }} />
-        <div style={{ flex: 1, textAlign: "center" }}>
-          <h1 style={{ fontSize: "24px", letterSpacing: "4px", fontWeight: "900", marginBottom: "2px" }}>JJ COLLEGE</h1>
-          <p style={{ fontSize: "14px", letterSpacing: "2px" }}>ENGINEERING AND TECHNOLOGY</p>
-          <p style={{ fontSize: "13px", color: "#fbbf24", fontWeight: "bold", margin: "2px 0" }}>AUTONOMOUS</p>
-          <span style={{ background: "#f97316", color: "white", padding: "2px 14px", borderRadius: "3px", fontSize: "10px", fontWeight: "bold" }}>SOWDAMBIKAA GROUP OF INSTITUTIONS</span>
+      <div style={{ background: "linear-gradient(135deg, #1e3a8a, #2563eb)", color: "white", padding: "10px 20px", display: "flex", alignItems: "center", gap: "12px" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+          <img src={LOGO_URL} alt="JJCET" style={{ width: "70px", height: "70px", borderRadius: "50%", background: "white", padding: "3px", objectFit: "contain" }} />
+          <p style={{ fontSize: "6px", color: "#bfdbfe", marginTop: "2px" }}>ESTD. 1994</p>
         </div>
-        <div style={{ textAlign: "right", fontSize: "8px", color: "#bfdbfe" }}>
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <h1 style={{ fontSize: "20px", letterSpacing: "3px", fontWeight: "900", marginBottom: "1px" }}>JJ COLLEGE</h1>
+          <p style={{ fontSize: "11px", letterSpacing: "2px" }}>ENGINEERING AND TECHNOLOGY</p>
+          <p style={{ fontSize: "11px", color: "#fbbf24", fontWeight: "bold", margin: "2px 0" }}>AUTONOMOUS</p>
+          <span style={{ background: "#f97316", color: "white", padding: "2px 12px", borderRadius: "3px", fontSize: "9px", fontWeight: "bold" }}>SOWDAMBIKAA GROUP OF INSTITUTIONS</span>
+        </div>
+        <div style={{ textAlign: "right", fontSize: "7px", color: "#bfdbfe" }}>
           <p>Report ID: {reportId}</p>
           <p>Generated: {dateStr}</p>
           <p>By: {user?.name || "System"}</p>
@@ -300,7 +307,7 @@ function NIRFReport({ data, reportId, now, user, deptName }: { data: any; report
         <div style={{ width: "140px", padding: "10px", textAlign: "center", borderRight: "2px solid #1e40af", background: "#f0f7ff" }}>
           <p style={{ fontSize: "9px", fontWeight: "bold", color: "#666" }}>OVERALL</p>
           <p style={{ fontSize: "9px", fontWeight: "bold", color: "#666" }}>NIRF SCORE</p>
-          <p style={{ fontSize: "32px", fontWeight: "900", color: "#1e40af", lineHeight: "1.1" }}>{instTotal.toFixed(1)}</p>
+          <p style={{ fontSize: "32px", fontWeight: "900", color: "#1e40af", lineHeight: "1.1" }}>{total.toFixed(1)}</p>
           <p style={{ fontSize: "10px", fontWeight: "bold", color: "#666", marginTop: "4px" }}>RANK BAND</p>
           <p style={{ fontSize: "16px", fontWeight: "900", color: "#1e40af" }}>151 – 200</p>
         </div>
@@ -337,7 +344,7 @@ function NIRFReport({ data, reportId, now, user, deptName }: { data: any; report
               <tr style={{ background: "#e2e8f0", fontWeight: "bold" }}>
                 <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "left" }}>TOTAL</td>
                 <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "center" }}>500</td>
-                <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "center", color: "#1e40af" }}>{instTotal.toFixed(2)}</td>
+                <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "center", color: "#1e40af" }}>{total.toFixed(2)}</td>
                 <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "center" }}>—</td>
                 <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "center" }}>100</td>
                 <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "center", color: "#1e40af" }}>{totalWeighted}</td>
@@ -413,19 +420,19 @@ function NIRFReport({ data, reportId, now, user, deptName }: { data: any; report
           <tr style={{ background: "#1e3a8a", color: "white", fontWeight: "bold" }}>
             <td colSpan={2} style={{ padding: "3px 5px", border: "1px solid #1e40af", textAlign: "left" }}>INSTITUTION TOTAL</td>
             <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>110</td>
-            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(instTlr * deptRows.length).toFixed(1)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(tlr * deptRows.length).toFixed(1)}</td>
             <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>110</td>
-            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(instRpc * deptRows.length).toFixed(1)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(rpc * deptRows.length).toFixed(1)}</td>
             <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>70</td>
-            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(instGo * deptRows.length).toFixed(1)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(go * deptRows.length).toFixed(1)}</td>
             <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>35</td>
-            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(instOi * deptRows.length).toFixed(1)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(oi * deptRows.length).toFixed(1)}</td>
             <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>35</td>
-            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(instPr * deptRows.length).toFixed(1)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(pr * deptRows.length).toFixed(1)}</td>
             <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>500</td>
             <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(70 * deptRows.length).toFixed(2)}</td>
-            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{instTotal.toFixed(2)}</td>
-            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{((instTotal / 70) * 100).toFixed(2)}%</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{total.toFixed(2)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{((total / 70) * 100).toFixed(2)}%</td>
             <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>—</td>
           </tr>
         </tfoot>
@@ -438,11 +445,11 @@ function NIRFReport({ data, reportId, now, user, deptName }: { data: any; report
           <div style={{ background: "#1e3a8a", color: "white", padding: "3px 8px", fontSize: "9px", fontWeight: "bold" }}>PARAMETER WISE PROGRESS</div>
           <div style={{ padding: "8px" }}>
             {[
-              { name: "Teaching, Learning & Resources (TLR)", value: instTlr, color: "#22c55e" },
-              { name: "Research and Professional Practice (RP)", value: instRpc, color: "#eab308" },
-              { name: "Graduation Outcomes (GO)", value: instGo, color: "#22c55e" },
-              { name: "Outreach and Inclusivity (OI)", value: instOi, color: "#22c55e" },
-              { name: "Perception (PR)", value: instPr, color: "#ef4444" },
+              { name: "Teaching, Learning & Resources (TLR)", value: tlr, color: "#22c55e" },
+              { name: "Research and Professional Practice (RP)", value: rpc, color: "#eab308" },
+              { name: "Graduation Outcomes (GO)", value: go, color: "#22c55e" },
+              { name: "Outreach and Inclusivity (OI)", value: oi, color: "#22c55e" },
+              { name: "Perception (PR)", value: pr, color: "#ef4444" },
             ].map((p, i) => (
               <div key={i} style={{ marginBottom: "4px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8px", marginBottom: "1px" }}>
