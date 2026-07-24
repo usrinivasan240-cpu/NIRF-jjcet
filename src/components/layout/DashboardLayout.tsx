@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store";
 import { Sidebar } from "./Sidebar";
@@ -8,12 +8,17 @@ import { Header } from "./Header";
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated) router.push("/login");
-  }, [isAuthenticated, router]);
+    setHydrated(true);
+  }, []);
 
-  if (!isAuthenticated) return null;
+  useEffect(() => {
+    if (hydrated && !isAuthenticated) router.push("/login");
+  }, [hydrated, isAuthenticated, router]);
+
+  if (!hydrated || !isAuthenticated) return null;
 
   return (
     <div className="flex min-h-screen">
