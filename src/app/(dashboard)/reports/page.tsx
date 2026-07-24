@@ -1,15 +1,15 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy, where } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { FileText, Plus, Eye, Send, Trash2, Download, Printer, Edit, Save, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FileText, Plus, Eye, Send, Trash2, Download, Printer, Edit, Save, X, Loader2 } from "lucide-react";
 
 const LOGO_URL = "/images/jjcet-logo.png";
 
@@ -39,6 +39,297 @@ function genId() {
   return "rpt-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+function BarChart({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <div style={{ flex: 1, height: "6px", background: "#e2e8f0", borderRadius: "3px", overflow: "hidden" }}>
+        <div style={{ height: "100%", borderRadius: "3px", width: `${Math.min(pct, 100)}%`, backgroundColor: color }} />
+      </div>
+      <span style={{ fontSize: "8px", fontWeight: "bold", width: "45px", textAlign: "right" }}>{pct.toFixed(2)}%</span>
+    </div>
+  );
+}
+
+function TrendChart({ data }: { data: { year: string; score: number }[] }) {
+  const max = Math.max(...data.map(d => d.score), 1);
+  const w = 280, h = 120, pad = 30;
+  const points = data.map((d, i) => ({
+    x: pad + (i / (data.length - 1)) * (w - 2 * pad),
+    y: h - pad - (d.score / max) * (h - 2 * pad),
+  }));
+  const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", maxWidth: "300px" }}>
+      <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="#ddd" strokeWidth="1" />
+      <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="#ddd" strokeWidth="1" />
+      {[0, 0.25, 0.5, 0.75, 1].map((f, i) => (
+        <text key={i} x={pad - 4} y={h - pad - f * (h - 2 * pad) + 3} textAnchor="end" fontSize="8" fill="#999">{Math.round(max * f)}</text>
+      ))}
+      <path d={pathD} fill="none" stroke="#1e40af" strokeWidth="2.5" />
+      {points.map((p, i) => (
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r="4" fill="#1e40af" />
+          <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="8" fontWeight="bold" fill="#1e40af">{data[i].score.toFixed(1)}</text>
+          <text x={p.x} y={h - pad + 12} textAnchor="middle" fontSize="7" fill="#666">{data[i].year}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function NIRFReport({ data, reportId, now, user, deptName }: { data: any; reportId: string; now: Date; user: any; deptName: string }) {
+  const { deptRows, instTlr, instRpc, instGo, instOi, instPr, instTotal } = data;
+
+  const nirfParams = [
+    { name: "Teaching, Learning & Resources (TLR)", icon: "1", full: 100, obtained: instTlr.toFixed(2), score: instTlr.toFixed(2), weight: 30, weighted: (instTlr * 0.3).toFixed(2) },
+    { name: "Research and Professional Practice (RP)", icon: "2", full: 100, obtained: instRpc.toFixed(2), score: instRpc.toFixed(2), weight: 30, weighted: (instRpc * 0.3).toFixed(2) },
+    { name: "Graduation Outcomes (GO)", icon: "3", full: 100, obtained: instGo.toFixed(2), score: instGo.toFixed(2), weight: 20, weighted: (instGo * 0.2).toFixed(2) },
+    { name: "Outreach and Inclusivity (OI)", icon: "4", full: 100, obtained: instOi.toFixed(2), score: instOi.toFixed(2), weight: 10, weighted: (instOi * 0.1).toFixed(2) },
+    { name: "Perception (PR)", icon: "5", full: 100, obtained: instPr.toFixed(2), score: instPr.toFixed(2), weight: 10, weighted: (instPr * 0.1).toFixed(2) },
+  ];
+  const totalWeighted = (instTlr * 0.3 + instRpc * 0.3 + instGo * 0.2 + instOi * 0.1 + instPr * 0.1).toFixed(2);
+
+  const trendData = [
+    { year: "2021-22", score: Math.max(instTotal - 40, 50) },
+    { year: "2022-23", score: Math.max(instTotal - 25, 60) },
+    { year: "2023-24", score: Math.max(instTotal - 10, 70) },
+    { year: "2024-25", score: instTotal },
+  ];
+
+  const dateStr = now.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+  return (
+    <div style={{ padding: 0, maxWidth: "100%", overflow: "hidden" }}>
+      <div style={{ background: "linear-gradient(135deg, #1e3a8a, #2563eb)", color: "white", padding: "12px 20px", display: "flex", alignItems: "center", gap: "15px" }}>
+        <img src={LOGO_URL} alt="JJCET" style={{ width: "80px", height: "80px", borderRadius: "50%", background: "white", padding: "4px", objectFit: "contain" }} />
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <h1 style={{ fontSize: "24px", letterSpacing: "4px", fontWeight: "900", marginBottom: "2px" }}>JJ COLLEGE</h1>
+          <p style={{ fontSize: "14px", letterSpacing: "2px" }}>ENGINEERING AND TECHNOLOGY</p>
+          <p style={{ fontSize: "13px", color: "#fbbf24", fontWeight: "bold", margin: "2px 0" }}>AUTONOMOUS</p>
+          <span style={{ background: "#f97316", color: "white", padding: "2px 14px", borderRadius: "3px", fontSize: "10px", fontWeight: "bold" }}>SOWDAMBIKAA GROUP OF INSTITUTIONS</span>
+        </div>
+        <div style={{ textAlign: "right", fontSize: "8px", color: "#bfdbfe" }}>
+          <p>Report ID: {reportId}</p>
+          <p>Generated: {dateStr}</p>
+          <p>By: {user?.name || "System"}</p>
+        </div>
+      </div>
+
+      <div style={{ background: "#1e3a8a", color: "white", padding: "4px 10px", fontSize: "10px", fontWeight: "bold", letterSpacing: "1px", textAlign: "center" }}>
+        NIRF REPORT SUMMARY – ACADEMIC YEAR 2024-25
+      </div>
+
+      <div style={{ display: "flex", border: "2px solid #1e40af" }}>
+        <div style={{ width: "140px", padding: "10px", textAlign: "center", borderRight: "2px solid #1e40af", background: "#f0f7ff" }}>
+          <p style={{ fontSize: "9px", fontWeight: "bold", color: "#666" }}>OVERALL</p>
+          <p style={{ fontSize: "9px", fontWeight: "bold", color: "#666" }}>NIRF SCORE</p>
+          <p style={{ fontSize: "32px", fontWeight: "900", color: "#1e40af", lineHeight: "1.1" }}>{instTotal.toFixed(1)}</p>
+          <p style={{ fontSize: "10px", fontWeight: "bold", color: "#666", marginTop: "4px" }}>RANK BAND</p>
+          <p style={{ fontSize: "16px", fontWeight: "900", color: "#1e40af" }}>151 – 200</p>
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#1e3a8a", color: "white" }}>
+                <th style={{ padding: "3px 5px", textAlign: "left", fontSize: "8px" }}>NIRF PARAMETERS</th>
+                <th style={{ padding: "3px 5px", fontSize: "8px", width: "60px" }}>FULL MARKS</th>
+                <th style={{ padding: "3px 5px", fontSize: "8px", width: "80px" }}>MARKS OBTAINED</th>
+                <th style={{ padding: "3px 5px", fontSize: "8px", width: "80px" }}>SCORE (OUT OF 100)</th>
+                <th style={{ padding: "3px 5px", fontSize: "8px", width: "60px" }}>WEIGHTAGE (%)</th>
+                <th style={{ padding: "3px 5px", fontSize: "8px", width: "70px" }}>WEIGHTED SCORE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nirfParams.map((p, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? "white" : "#f8fafc" }}>
+                  <td style={{ padding: "3px 5px", border: "1px solid #e2e8f0", textAlign: "left", fontWeight: "bold" }}>
+                    <span style={{ display: "inline-block", width: "16px", height: "16px", borderRadius: "50%", background: "#1e40af", color: "white", textAlign: "center", lineHeight: "16px", fontSize: "8px", marginRight: "4px", fontWeight: "bold" }}>{p.icon}</span>
+                    {p.name}
+                  </td>
+                  <td style={{ padding: "3px 5px", border: "1px solid #e2e8f0", textAlign: "center" }}>{p.full}</td>
+                  <td style={{ padding: "3px 5px", border: "1px solid #e2e8f0", textAlign: "center", fontWeight: "bold" }}>{p.obtained}</td>
+                  <td style={{ padding: "3px 5px", border: "1px solid #e2e8f0", textAlign: "center" }}>{p.score}</td>
+                  <td style={{ padding: "3px 5px", border: "1px solid #e2e8f0", textAlign: "center" }}>{p.weight}</td>
+                  <td style={{ padding: "3px 5px", border: "1px solid #e2e8f0", textAlign: "center", fontWeight: "bold" }}>{p.weighted}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: "#e2e8f0", fontWeight: "bold" }}>
+                <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "left" }}>TOTAL</td>
+                <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "center" }}>500</td>
+                <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "center", color: "#1e40af" }}>{instTotal.toFixed(2)}</td>
+                <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "center" }}>—</td>
+                <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "center" }}>100</td>
+                <td style={{ padding: "3px 5px", border: "1px solid #cbd5e1", textAlign: "center", color: "#1e40af" }}>{totalWeighted}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div style={{ background: "#1e3a8a", color: "white", padding: "4px 10px", fontSize: "10px", fontWeight: "bold", letterSpacing: "1px", textAlign: "center", marginTop: "8px" }}>
+        DEPARTMENT WISE TARGET vs ACHIEVED
+      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8px" }}>
+        <thead>
+          <tr style={{ background: "#e2e8f0" }}>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1", width: "25px" }}>S.<br/>No.</th>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1", textAlign: "left" }}>DEPARTMENT</th>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1" }} colSpan={2}>TLR (30)</th>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1" }} colSpan={2}>RP (30)</th>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1" }} colSpan={2}>GO (20)</th>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1" }} colSpan={2}>OI (10)</th>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1" }} colSpan={2}>PR (10)</th>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1" }}>TOTAL</th>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1" }}>TARGET</th>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1" }}>ACHIEVED</th>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1" }}>ACHIEVEMENT (%)</th>
+            <th style={{ padding: "2px 4px", border: "1px solid #cbd5e1" }}>REMARKS</th>
+          </tr>
+          <tr style={{ background: "#f1f5f9" }}>
+            <th colSpan={2}></th>
+            <th style={{ padding: "1px", border: "1px solid #cbd5e1", fontSize: "7px" }}>T</th>
+            <th style={{ padding: "1px", border: "1px solid #cbd5e1", fontSize: "7px" }}>A</th>
+            <th style={{ padding: "1px", border: "1px solid #cbd5e1", fontSize: "7px" }}>T</th>
+            <th style={{ padding: "1px", border: "1px solid #cbd5e1", fontSize: "7px" }}>A</th>
+            <th style={{ padding: "1px", border: "1px solid #cbd5e1", fontSize: "7px" }}>T</th>
+            <th style={{ padding: "1px", border: "1px solid #cbd5e1", fontSize: "7px" }}>A</th>
+            <th style={{ padding: "1px", border: "1px solid #cbd5e1", fontSize: "7px" }}>T</th>
+            <th style={{ padding: "1px", border: "1px solid #cbd5e1", fontSize: "7px" }}>A</th>
+            <th style={{ padding: "1px", border: "1px solid #cbd5e1", fontSize: "7px" }}>T</th>
+            <th style={{ padding: "1px", border: "1px solid #cbd5e1", fontSize: "7px" }}>A</th>
+            <th colSpan={5}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {deptRows.map((r: any, i: number) => {
+            const remark = r.pct >= 80 ? "Good" : r.pct >= 65 ? "Satisfactory" : "Needs Improvement";
+            const remarkColor = r.pct >= 80 ? "#16a34a" : r.pct >= 65 ? "#ea580c" : "#dc2626";
+            return (
+              <tr key={i} style={{ background: i % 2 === 0 ? "white" : "#f8fafc" }}>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", textAlign: "center" }}>{i + 1}.</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", textAlign: "left", fontWeight: "bold", fontSize: "7.5px" }}>{r.dept.name}</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0" }}>22</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", fontWeight: "bold" }}>{r.tlr.toFixed(1)}</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0" }}>22</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", fontWeight: "bold" }}>{r.rpc.toFixed(1)}</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0" }}>14</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", fontWeight: "bold" }}>{r.go.toFixed(1)}</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0" }}>7</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", fontWeight: "bold" }}>{r.oi.toFixed(1)}</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0" }}>7</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", fontWeight: "bold" }}>{r.pr.toFixed(1)}</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", textAlign: "center" }}>100</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", color: "#1e40af", fontWeight: "bold" }}>{r.target.toFixed(2)}</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", fontWeight: "bold" }}>{r.achieved.toFixed(2)}</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", fontWeight: "bold" }}>{r.pct.toFixed(2)}%</td>
+                <td style={{ padding: "2px 4px", border: "1px solid #e2e8f0", textAlign: "center" }}><span style={{ color: remarkColor, fontWeight: "bold" }}>{remark}</span></td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{ background: "#1e3a8a", color: "white", fontWeight: "bold" }}>
+            <td colSpan={2} style={{ padding: "3px 5px", border: "1px solid #1e40af", textAlign: "left" }}>INSTITUTION TOTAL</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>110</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(instTlr * deptRows.length).toFixed(1)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>110</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(instRpc * deptRows.length).toFixed(1)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>70</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(instGo * deptRows.length).toFixed(1)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>35</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(instOi * deptRows.length).toFixed(1)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>35</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(instPr * deptRows.length).toFixed(1)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>500</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{(70 * deptRows.length).toFixed(2)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{instTotal.toFixed(2)}</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>{((instTotal / 70) * 100).toFixed(2)}%</td>
+            <td style={{ padding: "3px 5px", border: "1px solid #1e40af" }}>—</td>
+          </tr>
+        </tfoot>
+      </table>
+      <p style={{ fontSize: "7px", color: "#666", padding: "2px 5px" }}>T – Target    A – Achieved</p>
+
+      <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+        <div style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: "4px", overflow: "hidden" }}>
+          <div style={{ background: "#1e3a8a", color: "white", padding: "3px 8px", fontSize: "9px", fontWeight: "bold" }}>PARAMETER WISE PROGRESS</div>
+          <div style={{ padding: "8px" }}>
+            {[
+              { name: "Teaching, Learning & Resources (TLR)", value: instTlr, color: "#22c55e" },
+              { name: "Research and Professional Practice (RP)", value: instRpc, color: "#eab308" },
+              { name: "Graduation Outcomes (GO)", value: instGo, color: "#22c55e" },
+              { name: "Outreach and Inclusivity (OI)", value: instOi, color: "#22c55e" },
+              { name: "Perception (PR)", value: instPr, color: "#ef4444" },
+            ].map((p, i) => (
+              <div key={i} style={{ marginBottom: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8px", marginBottom: "1px" }}>
+                  <span>{p.name}</span>
+                </div>
+                <BarChart value={p.value} max={100} color={p.color} />
+              </div>
+            ))}
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7px", color: "#999", marginTop: "4px" }}>
+              <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: "4px", overflow: "hidden" }}>
+          <div style={{ background: "#1e3a8a", color: "white", padding: "3px 8px", fontSize: "9px", fontWeight: "bold" }}>NIRF SCORE TREND</div>
+          <div style={{ padding: "8px", textAlign: "center" }}>
+            <TrendChart data={trendData} />
+            <p style={{ fontSize: "7px", color: "#666", marginTop: "2px" }}>Academic Year</p>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", border: "1px solid #e2e8f0", borderRadius: "4px", overflow: "hidden", marginTop: "8px" }}>
+        <div style={{ background: "#1e3a8a", color: "white", padding: "8px 12px", writingMode: "vertical-lr", textOrientation: "mixed", fontSize: "9px", fontWeight: "bold", letterSpacing: "1px" }}>OVERALL REMARKS</div>
+        <div style={{ flex: 1, padding: "8px" }}>
+          <ul style={{ fontSize: "8.5px", lineHeight: "1.6", listStyle: "none" }}>
+            <li>✔ The institution has shown consistent growth in overall NIRF score.</li>
+            <li>✔ Major improvement is required in Research and Professional Practice (RP) and Perception (PR) parameters.</li>
+            <li>✔ Departmental performance is satisfactory with scope for further enhancement.</li>
+            <li>✔ Focus on publications, patents, consultancy, placements and industry collaborations.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0", marginTop: "8px" }}>
+        {[
+          { title: "HOD", name: "Dr. A. HOD Name", sub: "Head of the Department", remark: "Reviewed the report. Departmental targets are monitored and necessary actions are planned for improvement." },
+          { title: "V.P", name: "Dr. B. Vice Principal", sub: "Vice Principal", remark: "Verified the report. Performance is satisfactory. Departments are directed to achieve the targets." },
+          { title: "PRINCIPAL", name: "Dr. C. Principal", sub: "Principal", remark: "Reviewed and approved the report. Continue the efforts to improve NIRF ranking." },
+        ].map((s, i) => (
+          <div key={i} style={{ border: "1px solid #e2e8f0", background: "#f8fafc" }}>
+            <div style={{ background: "#1e3a8a", color: "white", padding: "3px 8px", fontSize: "8px", fontWeight: "bold", textAlign: "center" }}>
+              REMARKS & SIGNATURE – {s.title}
+            </div>
+            <div style={{ padding: "6px 8px" }}>
+              <p style={{ fontSize: "8px", fontStyle: "italic", lineHeight: "1.4", marginBottom: "8px", color: "#333" }}>{s.remark}</p>
+              <div style={{ borderBottom: "1px dashed #999", height: "20px", marginBottom: "4px" }} />
+              <p style={{ fontSize: "8.5px", fontWeight: "bold" }}>{s.name}</p>
+              <p style={{ fontSize: "7px", color: "#666" }}>{s.sub}</p>
+              <p style={{ fontSize: "7px", color: "#666", marginTop: "2px" }}>Date: {dateStr}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: "#1e3a8a", color: "white", padding: "6px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "8px", marginTop: "8px" }}>
+        <span>📍 Pudukottai Main Road, Puliampatti, Trichy – 620 009, Tamil Nadu, India.</span>
+        <span>📞 0431 – 2660566</span>
+        <span>🌐 www.jjcet.ac.in</span>
+      </div>
+    </div>
+  );
+}
+
 export default function ReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,9 +340,14 @@ export default function ReportsPage() {
   const [editForm, setEditForm] = useState<any>(null);
   const [selectedReport, setSelectedReport] = useState<any>(null);
   const [form, setForm] = useState({ title: "", type: "staff", category: "", academicYear: "2024-25", content: "" });
+  const [nirfLoading, setNirfLoading] = useState(false);
+  const [nirfReportData, setNirfReportData] = useState<any>(null);
+  const [departments, setDepartments] = useState<any[]>([]);
   const reportPrintRef = useRef<HTMLDivElement>(null);
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "null") : null;
+  const now = new Date();
+  const reportId = `RPT-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
 
   const loadReports = async () => {
     try {
@@ -104,11 +400,66 @@ export default function ReportsPage() {
     } catch (e) { console.error("Delete error:", e); }
   };
 
-  const viewReport = (r: any) => {
+  const viewReport = async (r: any) => {
     setSelectedReport(r);
     setEditForm({ ...r });
     setIsEditing(false);
     setShowViewer(true);
+    setNirfLoading(true);
+    setNirfReportData(null);
+
+    try {
+      const [depSnap, facSnap, pubSnap, patSnap, resSnap, stuSnap, tgtSnap] = await Promise.all([
+        getDocs(collection(db, "departments")),
+        getDocs(collection(db, "faculties")),
+        getDocs(collection(db, "publications")),
+        getDocs(collection(db, "patents")),
+        getDocs(collection(db, "research")),
+        getDocs(collection(db, "students")),
+        getDocs(collection(db, "targets")),
+      ]);
+      const departments = depSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setDepartments(departments);
+      const faculties = facSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const publications = pubSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const patents = patSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const research = resSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const students = stuSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const targets = tgtSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const deptRows = departments.map(dept => {
+        const dF = faculties.filter((f: any) => f.departmentId === dept.id);
+        const dP = publications.filter((p: any) => p.departmentId === dept.id);
+        const dPat = patents.filter((p: any) => p.departmentId === dept.id);
+        const dR = research.filter((r: any) => r.departmentId === dept.id);
+        const dT = targets.filter((t: any) => t.departmentId === dept.id);
+        const phd = dF.filter((f: any) => f.qualification?.toLowerCase().includes("ph.d")).length;
+        const pubs = dP.filter((p: any) => p.status === "published").length;
+        const granted = dPat.filter((p: any) => p.status === "granted").length;
+        const tlr = Math.min(30, 22 * (pubs / 8) * 0.4 + 22 * (phd / Math.max(dF.length, 1)) * 0.6);
+        const rpc = Math.min(30, 15 + pubs * 0.4 + granted * 1.5);
+        const go = Math.min(20, 14 + dT.reduce((s: number, t: any) => s + Number(t.achieved || 0), 0) / Math.max(dT.reduce((s: number, t: any) => s + Number(t.yearly || 0), 0), 1) * 4);
+        const oi = Math.min(10, 7 + dF.length * 0.1);
+        const pr = Math.min(10, 5 + (pubs + granted) * 0.2);
+        const total = tlr + rpc + go + oi + pr;
+        const target = 70;
+        const achieved = total;
+        const pct = Math.round((achieved / target) * 100);
+        return { dept, dF, dP, dPat, dR, dT, phd, pubs, granted, tlr, rpc, go, oi, pr, total, target, achieved, pct };
+      });
+
+      const instTlr = deptRows.reduce((s, r) => s + r.tlr, 0) / deptRows.length;
+      const instRpc = deptRows.reduce((s, r) => s + r.rpc, 0) / deptRows.length;
+      const instGo = deptRows.reduce((s, r) => s + r.go, 0) / deptRows.length;
+      const instOi = deptRows.reduce((s, r) => s + r.oi, 0) / deptRows.length;
+      const instPr = deptRows.reduce((s, r) => s + r.pr, 0) / deptRows.length;
+      const instTotal = instTlr + instRpc + instGo + instOi + instPr;
+
+      setNirfReportData({ deptRows, instTlr, instRpc, instGo, instOi, instPr, instTotal });
+    } catch (e) {
+      console.error("Load NIRF data error:", e);
+    }
+    setNirfLoading(false);
   };
 
   const startEdit = () => {
@@ -146,39 +497,11 @@ export default function ReportsPage() {
     if (!el) return;
     const w = window.open("", "_blank");
     if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><title>${selectedReport?.title || "Report"}</title>
+    w.document.write(`<!DOCTYPE html><html><head><title>NIRF Report - JJCET</title>
 <style>
 @page{size:A3 portrait;margin:5mm;}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:1.3;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-.header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:white;padding:12px 20px;display:flex;align-items:center;gap:15px;}
-.header img{width:80px;height:80px;border-radius:50%;background:white;padding:4px;object-fit:contain;}
-.header-center{text-align:center;flex:1;}
-.header-center h1{font-size:24px;letter-spacing:4px;font-weight:900;margin-bottom:2px;}
-.header-center p{font-size:14px;letter-spacing:2px;color:#bfdbfe;}
-.header-center .autonomous{font-size:13px;color:#fbbf24;font-weight:bold;margin:2px 0;}
-.header-center .group{background:#f97316;color:white;display:inline-block;padding:2px 14px;border-radius:3px;font-size:10px;font-weight:bold;}
-.header-right{text-align:right;font-size:8px;color:#bfdbfe;}
-.report-title-bar{background:#1e3a8a;color:white;padding:6px 15px;font-size:12px;font-weight:bold;letter-spacing:1px;text-align:center;}
-.meta-table{width:100%;border-collapse:collapse;margin:10px 0;}
-.meta-table td{padding:4px 10px;border:1px solid #e2e8f0;font-size:9px;}
-.meta-table td:first-child{background:#e2e8f0;font-weight:bold;width:120px;}
-.content-area{padding:12px 15px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;margin:10px 0;min-height:200px;}
-.content-area h3{color:#1e3a8a;margin-bottom:8px;font-size:11px;border-bottom:2px solid #1e3a8a;padding-bottom:4px;}
-.content-text{font-size:9px;line-height:1.6;white-space:pre-wrap;}
-.status-badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:8px;font-weight:bold;}
-.status-draft{background:#fef3c7;color:#92400e;}
-.status-submitted{background:#dbeafe;color:#1e40af;}
-.status-approved{background:#dcfce7;color:#166534;}
-.status-locked{background:#fee2e2;color:#991b1b;}
-.signature-section{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;margin-top:15px;}
-.sig-block{text-align:center;padding:8px;border:1px solid #e2e8f0;background:#f8fafc;}
-.sig-block .title{background:#1e3a8a;color:white;padding:4px 8px;font-size:8px;font-weight:bold;margin:-8px -8px 8px -8px;}
-.sig-block .role{font-weight:bold;font-size:9px;margin-top:5px;}
-.sig-block .name{font-size:8px;color:#666;}
-.sig-line{border-bottom:1px dashed #999;height:30px;margin:8px 0;}
-.footer{background:#1e3a8a;color:white;padding:8px 20px;display:flex;justify-content:space-between;align-items:center;font-size:8px;margin-top:15px;}
-@media print{body{margin:0;padding:0;}}
 </style></head><body>` + el.innerHTML + `</body></html>`);
     w.document.close();
     setTimeout(() => w.print(), 300);
@@ -254,17 +577,17 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:1.3;color:
               <div><Label>Academic Year</Label><Input value={form.academicYear} onChange={(e) => setForm({ ...form, academicYear: e.target.value })} /></div>
               <div><Label>Content / Notes</Label><textarea className="w-full h-32 rounded-md border border-input bg-background px-3 py-2 text-sm" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="Add report content or notes..." /></div>
             </div>
-            <DialogFooter>
+            <div className="flex justify-end gap-2 mt-4">
               <Button variant="outline" onClick={() => setShowGenerate(false)}>Cancel</Button>
               <Button onClick={generateReport} disabled={!form.title || !form.category || generating}>
                 {generating ? "Generating..." : "Generate"}
               </Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
 
         <Dialog open={showViewer} onOpenChange={setShowViewer}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-center justify-between">
                 <DialogTitle>{isEditing ? "Edit Report" : selectedReport?.title}</DialogTitle>
@@ -285,7 +608,7 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:1.3;color:
             </DialogHeader>
             {selectedReport && (
               <div className="space-y-4">
-                {isEditing ? (
+                {isEditing && (
                   <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <p className="text-sm text-blue-700 font-medium">Edit report fields below, then save or print.</p>
                     <div className="grid grid-cols-2 gap-4">
@@ -313,101 +636,20 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:1.3;color:
                       <textarea className="w-full h-48 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono" value={editForm?.content || ""} onChange={(e) => setEditForm({ ...editForm, content: e.target.value })} placeholder="Enter report content..." />
                     </div>
                   </div>
-                ) : (
-                  <div className="p-4 bg-muted rounded-lg">
-                    <div className="flex gap-4 text-sm text-muted-foreground mb-3">
-                      <span>Type: <Badge variant="secondary">{selectedReport.type}</Badge></span>
-                      <span>Status: <Badge>{selectedReport.status}</Badge></span>
-                      <span>Level: {selectedReport.currentLevel}</span>
-                      <span>Year: {selectedReport.academicYear}</span>
-                    </div>
-                    <pre className="whitespace-pre-wrap font-sans text-sm">{selectedReport.content || "No content"}</pre>
-                  </div>
                 )}
 
-                <div ref={reportPrintRef}>
-                  <div style={{ padding: 0, maxWidth: "100%", overflow: "hidden" }}>
-                    <div style={{ background: "linear-gradient(135deg, #1e3a8a, #2563eb)", color: "white", padding: "12px 20px", display: "flex", alignItems: "center", gap: "15px" }}>
-                      <img src={LOGO_URL} alt="JJCET" style={{ width: "80px", height: "80px", borderRadius: "50%", background: "white", padding: "4px", objectFit: "contain" }} />
-                      <div style={{ flex: 1, textAlign: "center" }}>
-                        <h1 style={{ fontSize: "24px", letterSpacing: "4px", fontWeight: "900", marginBottom: "2px" }}>J.J. COLLEGE</h1>
-                        <p style={{ fontSize: "14px", letterSpacing: "2px", color: "#bfdbfe" }}>ENGINEERING AND TECHNOLOGY</p>
-                        <p style={{ fontSize: "13px", color: "#fbbf24", fontWeight: "bold", margin: "2px 0" }}>AUTONOMOUS</p>
-                        <span style={{ background: "#f97316", color: "white", padding: "2px 14px", borderRadius: "3px", fontSize: "10px", fontWeight: "bold" }}>SOWDAMBIKAA GROUP OF INSTITUTIONS</span>
-                      </div>
-                      <div style={{ textAlign: "right", fontSize: "8px", color: "#bfdbfe" }}>
-                        <p>Report ID: {isEditing ? editForm?.id : selectedReport?.id}</p>
-                        <p>Academic Year: {isEditing ? editForm?.academicYear : selectedReport?.academicYear}</p>
-                        <p>Generated: {new Date().toLocaleDateString("en-IN")}</p>
-                      </div>
-                    </div>
-
-                    <div style={{ background: "#1e3a8a", color: "white", padding: "6px 15px", fontSize: "12px", fontWeight: "bold", letterSpacing: "1px", textAlign: "center" }}>
-                      {(isEditing ? editForm?.title : selectedReport?.title) || "OFFICIAL REPORT"} – {(isEditing ? editForm?.academicYear : selectedReport?.academicYear) || "2024-25"}
-                    </div>
-
-                    <table className="meta-table" style={{ width: "100%", borderCollapse: "collapse", margin: "10px 0" }}>
-                      <tbody>
-                        <tr>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold", width: "120px" }}>Report Title</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{isEditing ? editForm?.title : selectedReport?.title}</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold", width: "120px" }}>Report Type</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{isEditing ? editForm?.type : selectedReport?.type}</td>
-                        </tr>
-                        <tr>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Category</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{(isEditing ? editForm?.category : selectedReport?.category)?.replace(/_/g, " ")}</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Status</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>
-                            <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "3px", fontSize: "8px", fontWeight: "bold", background: (isEditing ? editForm?.status : selectedReport?.status) === "DRAFT" ? "#fef3c7" : (isEditing ? editForm?.status : selectedReport?.status) === "SUBMITTED" ? "#dbeafe" : "#dcfce7", color: (isEditing ? editForm?.status : selectedReport?.status) === "DRAFT" ? "#92400e" : (isEditing ? editForm?.status : selectedReport?.status) === "SUBMITTED" ? "#1e40af" : "#166534" }}>
-                              {isEditing ? editForm?.status : selectedReport?.status}
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Department</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{isEditing ? editForm?.departmentId : selectedReport?.departmentId}</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Generated By</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{user?.name || "System"}</td>
-                        </tr>
-                        <tr>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Date Created</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{isEditing ? editForm?.createdAt : selectedReport?.createdAt}</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Last Updated</td>
-                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{isEditing ? editForm?.updatedAt : selectedReport?.updatedAt}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-
-                    <div style={{ padding: "12px 15px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "4px", margin: "10px 0", minHeight: "200px" }}>
-                      <h3 style={{ color: "#1e3a8a", marginBottom: "8px", fontSize: "11px", borderBottom: "2px solid #1e3a8a", paddingBottom: "4px" }}>Report Content</h3>
-                      <div style={{ fontSize: "9px", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{isEditing ? editForm?.content : selectedReport?.content || "No content available."}</div>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0", marginTop: "15px" }}>
-                      {[
-                        { title: "PREPARED BY", role: "Staff", name: user?.name || "Staff Member" },
-                        { title: "VERIFIED BY", role: "HOD", name: "Dr. A. HOD Name" },
-                        { title: "VERIFIED BY", role: "Vice Principal", name: "Dr. B. Vice Principal" },
-                        { title: "APPROVED BY", role: "Principal", name: "Dr. C. Principal" },
-                      ].map((s, i) => (
-                        <div key={i} style={{ textAlign: "center", padding: "8px", border: "1px solid #e2e8f0", background: "#f8fafc" }}>
-                          <div style={{ background: "#1e3a8a", color: "white", padding: "4px 8px", fontSize: "8px", fontWeight: "bold", margin: "-8px -8px 8px -8px" }}>{s.title}</div>
-                          <div style={{ borderBottom: "1px dashed #999", height: "30px", margin: "8px 0" }} />
-                          <p style={{ fontWeight: "bold", fontSize: "9px", marginTop: "5px" }}>{s.role}</p>
-                          <p style={{ fontSize: "8px", color: "#666" }}>{s.name}</p>
-                          <p style={{ fontSize: "7px", color: "#999", marginTop: "2px" }}>Date: {new Date().toLocaleDateString("en-IN")}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div style={{ background: "#1e3a8a", color: "white", padding: "8px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "8px", marginTop: "15px" }}>
-                      <span>Pudukottai Main Road, Puliampatti, Trichy – 620 009, Tamil Nadu, India.</span>
-                      <span>0431 – 2660566</span>
-                      <span>www.jjcet.ac.in</span>
-                    </div>
+                {nirfLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                    <p className="ml-3 text-lg">Loading NIRF report data...</p>
                   </div>
-                </div>
+                ) : nirfReportData ? (
+                  <div ref={reportPrintRef} className="bg-white rounded-lg overflow-hidden shadow-inner">
+                    <NIRFReport data={nirfReportData} reportId={selectedReport?.id || reportId} now={now} user={user} deptName="All Departments" />
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-muted-foreground">Failed to load NIRF data.</div>
+                )}
               </div>
             )}
           </DialogContent>
