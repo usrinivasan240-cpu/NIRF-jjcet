@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import admin from "firebase-admin";
-import jwt from "jsonwebtoken";
-import { v4 as uuid } from "uuid";
-import bcrypt from "bcryptjs";
 
 const JWT_SECRET = process.env.JWT_SECRET || "nirf-jwt-secret-key-2024";
 const PROJECT_ID = "jjcet-nirf-cdefd";
 
-let db: admin.firestore.Firestore;
+const mockUsers = [
+  { id: "1", email: "admin@jjcet.edu", password: "admin123", name: "Admin User", role: "SUPER_ADMIN", departmentId: null },
+  { id: "2", email: "principal@jjcet.edu", password: "principal123", name: "Principal", role: "PRINCIPAL", departmentId: null },
+  { id: "3", email: "vp@jjcet.edu", password: "vp123", name: "Vice Principal", role: "VICE_PRINCIPAL", departmentId: null },
+  { id: "4", email: "hod@jjcet.edu", password: "hod123", name: "HOD IT", role: "HOD", departmentId: "dept-it-001" },
+  { id: "5", email: "staff@jjcet.edu", password: "staff123", name: "Staff IT", role: "DEPARTMENT_STAFF", departmentId: "dept-it-001" },
+];
 
-function getDb(): admin.firestore.Firestore {
-  if (db) return db;
+let _admin: typeof import("firebase-admin");
+let _db: any;
+
+async function getDb() {
+  if (_db) return _db;
+  if (!_admin) _admin = await import("firebase-admin");
+  const admin = _admin.default || _admin;
   if (admin.apps.length === 0) {
     try {
       const key = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -21,25 +28,37 @@ function getDb(): admin.firestore.Firestore {
         admin.initializeApp({ projectId: PROJECT_ID });
       }
     } catch {
-      admin.initializeApp({ projectId: PROJECT_ID });
+      try { admin.initializeApp({ projectId: PROJECT_ID }); } catch {}
     }
   }
-  db = admin.firestore();
-  return db;
+  _db = admin.firestore();
+  return _db;
 }
 
-const mockUsers = [
-  { id: "1", email: "admin@jjcet.edu", password: "admin123", name: "Admin User", role: "SUPER_ADMIN", departmentId: null },
-  { id: "2", email: "principal@jjcet.edu", password: "principal123", name: "Principal", role: "PRINCIPAL", departmentId: null },
-  { id: "3", email: "vp@jjcet.edu", password: "vp123", name: "Vice Principal", role: "VICE_PRINCIPAL", departmentId: null },
-  { id: "4", email: "hod@jjcet.edu", password: "hod123", name: "HOD IT", role: "HOD", departmentId: "dept-it-001" },
-  { id: "5", email: "staff@jjcet.edu", password: "staff123", name: "Staff IT", role: "DEPARTMENT_STAFF", departmentId: "dept-it-001" },
-];
+async function signToken(payload: any) {
+  const jwt = (await import("jsonwebtoken")).default;
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "24h" });
+}
+
+async function verifyToken(token: string) {
+  const jwt = (await import("jsonwebtoken")).default;
+  return jwt.verify(token, JWT_SECRET) as any;
+}
+
+async function hashPassword(pw: string) {
+  const bcrypt = (await import("bcryptjs")).default;
+  return bcrypt.hash(pw, 10);
+}
+
+async function genId() {
+  const { v4 } = await import("uuid");
+  return v4();
+}
 
 function authUser(req: NextRequest): any | null {
   const h = req.headers.get("authorization");
   if (!h?.startsWith("Bearer ")) return null;
-  try { return jwt.verify(h.split(" ")[1], JWT_SECRET) as any; } catch { return null; }
+  try { const jwt = require("jsonwebtoken"); return jwt.verify(h.split(" ")[1], JWT_SECRET) as any; } catch { return null; }
 }
 
 function deptScope(user: any): string | null {
@@ -55,6 +74,8 @@ const REPORT_TEMPLATES: Record<string, string[]> = {
 };
 
 const APPROVAL_LEVELS = ["STAFF", "HOD", "VP", "PRINCIPAL", "LOCKED"];
+
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest, { params }: { params: { path: string[] } }) { return handleRoute(req, params.path, "GET"); }
 export async function POST(req: NextRequest, { params }: { params: { path: string[] } }) { return handleRoute(req, params.path, "POST"); }
@@ -74,17 +95,17 @@ async function handleRoute(req: NextRequest, path: string[], method: string): Pr
     const scope = deptScope(user);
 
     switch (col) {
-      case "departments": return await handleCrud("departments", req, id, method, scope, true);
-      case "faculties": return await handleCrud("faculties", req, id, method, scope, true);
-      case "students": return await handleCrud("students", req, id, method, scope, true);
-      case "publications": return await handleCrud("publications", req, id, method, scope, true);
-      case "patents": return await handleCrud("patents", req, id, method, scope, true);
-      case "research": return await handleCrud("research", req, id, method, scope, true);
-      case "events": return await handleCrud("events", req, id, method, scope, true);
-      case "targets": return await handleCrud("targets", req, id, method, scope, true);
-      case "notifications": return await handleCrud("notifications", req, id, method, scope, false);
-      case "documents": return await handleCrud("documents", req, id, method, scope, true);
-      case "signatures": return await handleCrud("signatures", req, id, method, scope, false);
+      case "departments": return await handleCrud("departments", req, id, method, scope);
+      case "faculties": return await handleCrud("faculties", req, id, method, scope);
+      case "students": return await handleCrud("students", req, id, method, scope);
+      case "publications": return await handleCrud("publications", req, id, method, scope);
+      case "patents": return await handleCrud("patents", req, id, method, scope);
+      case "research": return await handleCrud("research", req, id, method, scope);
+      case "events": return await handleCrud("events", req, id, method, scope);
+      case "targets": return await handleCrud("targets", req, id, method, scope);
+      case "notifications": return await handleCrud("notifications", req, id, method, null);
+      case "documents": return await handleCrud("documents", req, id, method, scope);
+      case "signatures": return await handleCrud("signatures", req, id, method, null);
       case "reports": return await handleReports(req, id, action, method, user, scope);
       case "approvals": return await handleApprovals(req, id, action, method, user);
       case "users": return await handleUsers(req, id, method, scope);
@@ -96,58 +117,69 @@ async function handleRoute(req: NextRequest, path: string[], method: string): Pr
 }
 
 async function handleAuth(req: NextRequest, action: string | undefined, method: string) {
-  const d = getDb();
   if (action === "login" && method === "POST") {
     const { email, password } = await req.json();
     if (!email || !password) return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+
     const mu = mockUsers.find(u => u.email === email && u.password === password);
     if (mu) {
-      const token = jwt.sign({ id: mu.id, email: mu.email, role: mu.role, departmentId: mu.departmentId }, JWT_SECRET, { expiresIn: "24h" });
+      const token = await signToken({ id: mu.id, email: mu.email, role: mu.role, departmentId: mu.departmentId });
       return NextResponse.json({ success: true, data: { token, user: { id: mu.id, email: mu.email, name: mu.name, role: mu.role, departmentId: mu.departmentId } } });
     }
+
     try {
+      const d = await getDb();
       const snap = await d.collection("users").where("email", "==", email).where("password", "==", password).limit(1).get();
       if (snap.empty) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
       const u = snap.docs[0].data();
-      const token = jwt.sign({ id: snap.docs[0].id, email: u.email, role: u.role, departmentId: u.departmentId || null }, JWT_SECRET, { expiresIn: "24h" });
+      const token = await signToken({ id: snap.docs[0].id, email: u.email, role: u.role, departmentId: u.departmentId || null });
       return NextResponse.json({ success: true, data: { token, user: { id: snap.docs[0].id, email: u.email, name: u.name, role: u.role, departmentId: u.departmentId } } });
-    } catch { return NextResponse.json({ error: "Invalid credentials" }, { status: 401 }); }
+    } catch (e: any) {
+      return NextResponse.json({ error: "Invalid credentials: " + e.message }, { status: 401 });
+    }
   }
   if (action === "profile" && method === "GET") {
     const user = authUser(req);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const mu = mockUsers.find(u => u.id === user.id);
     if (mu) return NextResponse.json({ id: mu.id, email: mu.email, name: mu.name, role: mu.role, departmentId: mu.departmentId });
-    const doc = await d.collection("users").doc(user.id).get();
-    if (!doc.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const u = doc.data()!;
-    return NextResponse.json({ id: doc.id, email: u.email, name: u.name, role: u.role, departmentId: u.departmentId });
+    try {
+      const d = await getDb();
+      const doc = await d.collection("users").doc(user.id).get();
+      if (!doc.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      const u = doc.data()!;
+      return NextResponse.json({ id: doc.id, email: u.email, name: u.name, role: u.role, departmentId: u.departmentId });
+    } catch { return NextResponse.json({ error: "Not found" }, { status: 404 }); }
   }
   return NextResponse.json({ error: "Not found" }, { status: 404 });
 }
 
 async function handleAnalytics(action: string | undefined, _method: string) {
-  const d = getDb();
-  if (action === "dashboard") {
-    const [fac, stu, dep, pub, pat, evt] = await Promise.all([
-      d.collection("faculties").get(), d.collection("students").get(), d.collection("departments").get(),
-      d.collection("publications").get(), d.collection("patents").get(), d.collection("events").get(),
-    ]);
-    return NextResponse.json({ totalFaculties: fac.size, totalStudents: stu.size, totalDepartments: dep.size, totalPublications: pub.size, totalPatents: pat.size, totalEvents: evt.size });
-  }
-  if (action === "department") {
-    const depSnap = await d.collection("departments").get();
-    const depts = await Promise.all(depSnap.docs.map(async (dd) => {
-      const [f, s] = await Promise.all([d.collection("faculties").where("departmentId", "==", dd.id).get(), d.collection("students").where("departmentId", "==", dd.id).get()]);
-      return { id: dd.id, ...dd.data(), facultyCount: f.size, studentCount: s.size };
-    }));
-    return NextResponse.json(depts);
+  try {
+    const d = await getDb();
+    if (action === "dashboard") {
+      const [fac, stu, dep, pub, pat, evt] = await Promise.all([
+        d.collection("faculties").get(), d.collection("students").get(), d.collection("departments").get(),
+        d.collection("publications").get(), d.collection("patents").get(), d.collection("events").get(),
+      ]);
+      return NextResponse.json({ totalFaculties: fac.size, totalStudents: stu.size, totalDepartments: dep.size, totalPublications: pub.size, totalPatents: pat.size, totalEvents: evt.size });
+    }
+    if (action === "department") {
+      const depSnap = await d.collection("departments").get();
+      const depts = await Promise.all(depSnap.docs.map(async (dd: any) => {
+        const [f, s] = await Promise.all([d.collection("faculties").where("departmentId", "==", dd.id).get(), d.collection("students").where("departmentId", "==", dd.id).get()]);
+        return { id: dd.id, ...dd.data(), facultyCount: f.size, studentCount: s.size };
+      }));
+      return NextResponse.json(depts);
+    }
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
   return NextResponse.json({ error: "Not found" }, { status: 404 });
 }
 
-async function handleCrud(col: string, req: NextRequest, id: string | undefined, method: string, scope: string | null, enrich: boolean) {
-  const d = getDb();
+async function handleCrud(col: string, req: NextRequest, id: string | undefined, method: string, scope: string | null) {
+  const d = await getDb();
   if (method === "GET" && !id) {
     let q: any = d.collection(col);
     if (scope) {
@@ -162,19 +194,19 @@ async function handleCrud(col: string, req: NextRequest, id: string | undefined,
     }
     const snap = await q.get();
     let items = snap.docs.map((dd: any) => ({ id: dd.id, ...dd.data() }));
-    if (enrich) items = await Promise.all(items.map(i => enrichItem(col, i)));
+    if (!["signatures", "notifications"].includes(col)) items = await Promise.all(items.map(i => enrichItem(col, i)));
     return NextResponse.json(items);
   }
   if (method === "GET" && id) {
     const doc = await d.collection(col).doc(id).get();
     if (!doc.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
     let item: any = { id: doc.id, ...doc.data() };
-    if (enrich) item = await enrichItem(col, item);
+    if (!["signatures", "notifications"].includes(col)) item = await enrichItem(col, item);
     return NextResponse.json(item);
   }
   if (method === "POST") {
     const body = await req.json();
-    const nid = uuid();
+    const nid = await genId();
     const data = { ...body, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     await d.collection(col).doc(nid).set(data);
     return NextResponse.json({ id: nid, ...data }, { status: 201 });
@@ -195,7 +227,7 @@ async function handleCrud(col: string, req: NextRequest, id: string | undefined,
 }
 
 async function enrichItem(col: string, item: any) {
-  const d = getDb();
+  const d = await getDb();
   const r = { ...item };
   if (r.departmentId && !["publications", "patents", "research"].includes(col)) {
     const dd = await d.collection("departments").doc(r.departmentId).get();
@@ -217,7 +249,7 @@ async function enrichItem(col: string, item: any) {
 }
 
 async function handleReports(req: NextRequest, id: string | undefined, action: string | undefined, method: string, user: any, scope: string | null) {
-  const d = getDb();
+  const d = await getDb();
   if (action === "templates") return NextResponse.json(REPORT_TEMPLATES);
   if (method === "GET" && !id) {
     let q: any = d.collection("reports");
@@ -237,7 +269,7 @@ async function handleReports(req: NextRequest, id: string | undefined, action: s
   }
   if (method === "POST" && action === "generate") {
     const body = await req.json();
-    const nid = uuid();
+    const nid = await genId();
     const data = { ...body, status: "DRAFT", creatorId: user.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     await d.collection("reports").doc(nid).set(data);
     return NextResponse.json({ id: nid, ...data }, { status: 201 });
@@ -270,7 +302,7 @@ async function handleReports(req: NextRequest, id: string | undefined, action: s
 }
 
 async function handleApprovals(req: NextRequest, id: string | undefined, action: string | undefined, method: string, user: any) {
-  const d = getDb();
+  const d = await getDb();
   if (method === "GET" && !id) {
     let q: any = d.collection("approvals");
     if (user.role === "HOD") q = q.where("level", "==", "HOD").where("status", "==", "PENDING");
@@ -283,7 +315,7 @@ async function handleApprovals(req: NextRequest, id: string | undefined, action:
   }
   if (method === "POST" && !id) {
     const { reportId, level, comment } = await req.json();
-    const nid = uuid();
+    const nid = await genId();
     await d.collection("approvals").doc(nid).set({ reportId, userId: user.id, level, status: "PENDING", comment, createdAt: new Date().toISOString() });
     return NextResponse.json({ id: nid, reportId, level, status: "PENDING" }, { status: 201 });
   }
@@ -291,13 +323,13 @@ async function handleApprovals(req: NextRequest, id: string | undefined, action:
     const doc = await d.collection("approvals").doc(id).get();
     if (!doc.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const a = doc.data()!;
-    const { comment } = await req.json().catch(() => ({ comment: "" }));
-    await d.collection("approvals").doc(id).update({ status: "APPROVED", comment, approvedAt: new Date().toISOString() });
+    const body = await req.json().catch(() => ({}));
+    await d.collection("approvals").doc(id).update({ status: "APPROVED", comment: body.comment || "", approvedAt: new Date().toISOString() });
     const li = APPROVAL_LEVELS.indexOf(a.level);
     if (li + 1 < APPROVAL_LEVELS.length) {
       const next = APPROVAL_LEVELS[li + 1];
       if (next === "LOCKED") await d.collection("reports").doc(a.reportId).update({ status: "LOCKED" });
-      else await d.collection("approvals").doc(uuid()).set({ reportId: a.reportId, userId: user.id, level: next, status: "PENDING", comment: `Auto after ${a.level}`, createdAt: new Date().toISOString() });
+      else await d.collection("approvals").doc(await genId()).set({ reportId: a.reportId, userId: user.id, level: next, status: "PENDING", comment: `Auto after ${a.level}`, createdAt: new Date().toISOString() });
     }
     return NextResponse.json({ message: "Approved" });
   }
@@ -305,8 +337,8 @@ async function handleApprovals(req: NextRequest, id: string | undefined, action:
     const doc = await d.collection("approvals").doc(id).get();
     if (!doc.exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const a = doc.data()!;
-    const { comment } = await req.json().catch(() => ({ comment: "" }));
-    await d.collection("approvals").doc(id).update({ status: "REJECTED", comment });
+    const body = await req.json().catch(() => ({}));
+    await d.collection("approvals").doc(id).update({ status: "REJECTED", comment: body.comment || "" });
     await d.collection("reports").doc(a.reportId).update({ status: "DRAFT" });
     return NextResponse.json({ message: "Rejected" });
   }
@@ -314,7 +346,7 @@ async function handleApprovals(req: NextRequest, id: string | undefined, action:
 }
 
 async function handleUsers(req: NextRequest, id: string | undefined, method: string, scope: string | null) {
-  const d = getDb();
+  const d = await getDb();
   if (method === "GET" && !id) {
     let q: any = d.collection("users");
     if (scope) q = q.where("departmentId", "==", scope);
@@ -323,8 +355,8 @@ async function handleUsers(req: NextRequest, id: string | undefined, method: str
   }
   if (method === "POST" && !id) {
     const { email, password, name, role, departmentId } = await req.json();
-    const hash = await bcrypt.hash(password, 10);
-    const nid = uuid();
+    const hash = await hashPassword(password);
+    const nid = await genId();
     await d.collection("users").doc(nid).set({ email, password: hash, name, role, departmentId: departmentId || null, createdAt: new Date().toISOString() });
     return NextResponse.json({ id: nid, email, name, role }, { status: 201 });
   }

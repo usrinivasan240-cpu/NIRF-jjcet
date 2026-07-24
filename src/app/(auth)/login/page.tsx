@@ -28,7 +28,9 @@ export default function LoginPage() {
     setLoading(true); setError("");
     try {
       const res = await fetch(`${API}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, password: pw }) });
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { setError("Server returned: " + text.substring(0, 200)); setLoading(false); return; }
       const token = data.data?.token || data.token;
       const user = data.data?.user || data.user;
       if (token) {
@@ -38,7 +40,7 @@ export default function LoginPage() {
       } else {
         setError(data.error || data.message || "Invalid credentials");
       }
-    } catch { setError("Cannot connect to server"); }
+    } catch (e: any) { setError(e.message || "Cannot connect to server"); }
     finally { setLoading(false); }
   };
 
