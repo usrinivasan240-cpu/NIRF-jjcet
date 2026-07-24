@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { CheckCircle, XCircle, Clock } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 export default function ApprovalsPage() {
   const [approvals, setApprovals] = useState<any[]>([]);

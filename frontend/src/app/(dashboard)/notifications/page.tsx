@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Bell, CheckCheck, Info, AlertTriangle, CheckCircle } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);

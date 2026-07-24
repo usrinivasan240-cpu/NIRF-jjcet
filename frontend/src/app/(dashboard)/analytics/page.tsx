@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen, Award, FlaskConical, Users, Calendar, Target, TrendingUp, BarChart3 } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 export default function AnalyticsPage() {
   const [stats, setStats] = useState<any>({});

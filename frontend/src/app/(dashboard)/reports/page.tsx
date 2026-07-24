@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { FileText, Plus, Eye, Send, Trash2, Download, Printer } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 const REPORT_TYPES = [
   { value: "staff", label: "Staff Reports" },

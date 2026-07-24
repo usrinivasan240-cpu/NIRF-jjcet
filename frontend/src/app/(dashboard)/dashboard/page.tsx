@@ -5,7 +5,7 @@ import { StatsCard } from "@/components/shared/StatsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, BookOpen, Lightbulb, FlaskConical, GraduationCap, FileText, Calendar } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<any>(null);

@@ -8,3 +8,5 @@ server_log.txt
 backend/serviceAccountKey.json
 backend/prisma/
 *-firebase-adminsdk-*.json
+serviceAccountKey.json
+frontend/serviceAccountKey.json
