@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store";
-import { LayoutDashboard, Building2, Users, BookOpen, Lightbulb, FlaskConical, GraduationCap, Calendar, Target, FileText, CheckCircle, PenTool, FolderOpen, BarChart3, Bell, UserCog, Settings, Database } from "lucide-react";
+import { LayoutDashboard, Building2, Users, BookOpen, Lightbulb, FlaskConical, GraduationCap, Calendar, Target, FileText, CheckCircle, PenTool, FolderOpen, BarChart3, Bell, UserCog, Settings, Database, Award } from "lucide-react";
 import { Role } from "@/types";
 
 const allItems = [
@@ -16,6 +16,7 @@ const allItems = [
   { href: "/events", label: "Events", icon: Calendar },
   { href: "/targets", label: "Targets", icon: Target },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/nirf-report", label: "NIRF Report", icon: Award },
   { href: "/approvals", label: "Approvals", icon: CheckCircle },
   { href: "/signatures", label: "Signatures", icon: PenTool },
   { href: "/documents", label: "Documents", icon: FolderOpen },
