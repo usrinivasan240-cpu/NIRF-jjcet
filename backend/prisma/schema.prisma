@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Department {
+  id          String     @id @default(uuid())
+  name        String
+  code        String     @unique
+  description String?
+  headId      String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  faculties   Faculty[]
+  students    Student[]
+  publications Publication[]
+  patents     Patent[]
+  research    Research[]
+  phdScholars PhdScholar[]
+  targets     Target[]
+  events      Event[]
+  documents   Document[]
+  reports     Report[]
+}
+
+model Faculty {
+  id              String       @id @default(uuid())
+  name            String
+  email           String
+  phone           String?
+  designation     String?
+  qualification   String?
+  experience      String?
+  specialization  String?
+  departmentId    String
+  department      Department   @relation(fields: [departmentId], references: [id])
+  employeeId      String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  publications    Publication[]
+  patents         Patent[]
+  research        Research[]
+}
+
+model Student {
+  id           String     @id @default(uuid())
+  name         String
+  email        String?
+  rollNumber   String?
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  category     String?
+  title        String?
+  year         String?
+  guideName    String?
+  status       String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Publication {
+  id              String     @id @default(uuid())
+  title           String
+  authors         String?
+  journal         String?
+  type            String?
+  publisher       String?
+  citationCount   Int?
+  status          String?
+  facultyId       String?
+  faculty         Faculty?   @relation(fields: [facultyId], references: [id])
+  departmentId    String
+  department      Department @relation(fields: [departmentId], references: [id])
+  isSCI           Boolean    @default(false)
+  isScopus        Boolean    @default(false)
+  publicationDate String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model Patent {
+  id           String     @id @default(uuid())
+  title        String
+  patentNumber String?
+  country      String?
+  status       String?
+  isGranted    Boolean    @default(false)
+  filingDate   String?
+  grantDate    String?
+  inventors    String?
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  facultyId    String?
+  faculty      Faculty?   @relation(fields: [facultyId], references: [id])
+  filedDate    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Research {
+  id             String     @id @default(uuid())
+  title          String
+  pi             String?
+  coPi           String?
+  fundingAgency  String?
+  amount         String?
+  status         String?
+  startDate      String?
+  endDate        String?
+  sanctionedYear String?
+  departmentId   String
+  department     Department @relation(fields: [departmentId], references: [id])
+  facultyId      String?
+  faculty        Faculty?   @relation(fields: [facultyId], references: [id])
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model PhdScholar {
+  id           String     @id @default(uuid())
+  name         String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Event {
+  id           String     @id @default(uuid())
+  title        String
+  type         String?
+  date         String?
+  endDate      String?
+  venue        String?
+  organizer    String?
+  participants String?
+  status       String?
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Target {
+  id           String     @id @default(uuid())
+  category     String
+  yearly       Int
+  achieved     Int        @default(0)
+  year         Int
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Report {
+  id           String     @id @default(uuid())
+  title        String
+  type         String?
+  category     String?
+  academicYear String?
+  status       String     @default("DRAFT")
+  currentLevel String?
+  content      String?
+  config       String?
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  creatorId    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Document {
+  id           String     @id @default(uuid())
+  title        String
+  description  String?
+  fileName     String?
+  fileUrl      String?
+  fileType     String?
+  fileSize     Int?
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  uploadedBy   String?
+  createdAt    DateTime   @default(now())
+}
+
+model Approval {
+  id        String   @id @default(uuid())
+  reportId  String
+  userId    String
+  level     String
+  status    String
+  comment   String?
+  approvedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model Signature {
+  id             String   @id @default(uuid())
+  userId         String
+  reportId       String
+  signatureImage String?
+  signedAt       DateTime?
+  createdAt      DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String?
+  type      String?
+  read      Boolean  @default(false)
+  userId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id           String     @id @default(uuid())
+  name         String
+  email        String     @unique
+  password     String
+  role         String
+  departmentId String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}

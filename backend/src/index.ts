@@ -23,6 +23,7 @@ import notificationRoutes from "./routes/notifications";
 import userRoutes from "./routes/users";
 import analyticsRoutes from "./routes/analytics";
 import documentRoutes from "./routes/documents";
+import reportEngineRoutes from "./routes/reportEngine";
 
 initFirebase();
 
@@ -52,6 +53,11 @@ app.use("/api/notifications", authenticate, enforceDepartmentScope, notification
 app.use("/api/users", authenticate, enforceDepartmentScope, userRoutes);
 app.use("/api/analytics", authenticate, enforceDepartmentScope, analyticsRoutes);
 app.use("/api/documents", authenticate, enforceDepartmentScope, documentRoutes);
+// No enforceDepartmentScope here on purpose — the report engine does its own
+// role/department access check per-request (see validator.assertDepartmentAccess),
+// because a department-scoped user must still be allowed to send no departmentId
+// (meaning "my department"), which enforceDepartmentScope doesn't express.
+app.use("/api/report-engine", authenticate, reportEngineRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

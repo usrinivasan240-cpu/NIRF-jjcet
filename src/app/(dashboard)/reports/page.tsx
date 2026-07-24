@@ -502,6 +502,54 @@ export default function ReportsPage() {
     loadReports();
   }, []);
 
+  const loadNirfDataFromEngine = async (): Promise<{ deptRows: any[]; instTlr: number; instRpc: number; instGo: number; instOi: number; instPr: number; instTotal: number } | null> => {
+    const ENGINE_URL = process.env.NEXT_PUBLIC_REPORT_ENGINE_URL || "http://localhost:5000/api";
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return null;
+      const res = await fetch(`${ENGINE_URL}/report-engine/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          reportType: "nirf",
+          academicYear: Number(config.academicYear.split("-")[0]),
+          asOfMonth: "March",
+          generatedByUserId: user?.id || "system",
+          generatedByName: user?.name || "System",
+        }),
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json.success || !json.data) return null;
+      const engineData = json.data;
+      const deptRows = (engineData.departmentRows || []).map((row: any, i: number) => {
+        const agg = row.aggregate;
+        const targetTotal = row.targetVsAchievement.reduce((s: number, t: any) => s + t.yearlyTarget, 0);
+        const achievedTotal = row.targetVsAchievement.reduce((s: number, t: any) => s + t.achieved, 0);
+        return {
+          dept: { id: row.department.id, name: row.department.name },
+          dF: [], dP: [], dPat: [], dR: [], dT: row.targetVsAchievement,
+          phd: agg.phdScholarCount, pubs: agg.publicationCount, granted: agg.grantedPatentCount,
+          tlr: safe(targetTotal * 0.3), rpc: safe(targetTotal * 0.3), go: safe(targetTotal * 0.2),
+          oi: safe(targetTotal * 0.1), pr: safe(targetTotal * 0.1),
+          total: safe(achievedTotal), target: safe(targetTotal), achieved: safe(achievedTotal),
+          pct: row.overallAchievedPct || 0,
+        };
+      });
+      const totals = engineData.institutionTotals || {};
+      const instTlr = safe(totals.publicationCount || 0);
+      const instRpc = safe(totals.grantedPatentCount || 0);
+      const instGo = safe(totals.researchCount || 0);
+      const instOi = safe(totals.studentCount || 0);
+      const instPr = safe(totals.eventCount || 0);
+      const instTotal = instTlr + instRpc + instGo + instOi + instPr;
+      return { deptRows, instTlr, instRpc, instGo, instOi, instPr, instTotal };
+    } catch (e) {
+      console.warn("Report engine API unavailable, falling back to client-side calculation:", e);
+      return null;
+    }
+  };
+
   const loadNirfData = async () => {
     const [depSnap, facSnap, pubSnap, patSnap, resSnap, stuSnap, tgtSnap] = await Promise.all([
       getDocs(collection(db, "departments")),
@@ -572,8 +620,13 @@ export default function ReportsPage() {
       await setDoc(doc(db, "reports", id), reportData);
       setShowGenerate(false);
       loadReports();
-      const fullData = await loadNirfData();
-      setNirfReportData(fullData);
+      const engineData = await loadNirfDataFromEngine();
+      if (engineData) {
+        setNirfReportData(engineData);
+      } else {
+        const fullData = await loadNirfData();
+        setNirfReportData(fullData);
+      }
       setViewerConfig({ ...config });
       setSelectedReport({ id, ...reportData });
       setIsEditing(false);
@@ -614,8 +667,13 @@ export default function ReportsPage() {
     setNirfReportData(null);
 
     try {
-      const fullData = await loadNirfData();
-      setNirfReportData(fullData);
+      const engineData = await loadNirfDataFromEngine();
+      if (engineData) {
+        setNirfReportData(engineData);
+      } else {
+        const fullData = await loadNirfData();
+        setNirfReportData(fullData);
+      }
     } catch (e) {
       console.error("Load NIRF data error:", e);
     }
