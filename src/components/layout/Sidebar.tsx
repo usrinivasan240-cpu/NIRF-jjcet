@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store";
-import { LayoutDashboard, Building2, Users, BookOpen, Lightbulb, FlaskConical, GraduationCap, Calendar, Target, FileText, CheckCircle, PenTool, FolderOpen, BarChart3, Bell, UserCog, Settings } from "lucide-react";
+import { LayoutDashboard, Building2, Users, BookOpen, Lightbulb, FlaskConical, GraduationCap, Calendar, Target, FileText, CheckCircle, PenTool, FolderOpen, BarChart3, Bell, UserCog, Settings, Database } from "lucide-react";
 import { Role } from "@/types";
 
 const allItems = [
@@ -23,6 +23,7 @@ const allItems = [
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/users", label: "Users", icon: UserCog, roles: ["SUPER_ADMIN"] },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/seed", label: "Seed Database", icon: Database, roles: ["SUPER_ADMIN"] },
 ];
 
 export function Sidebar() {

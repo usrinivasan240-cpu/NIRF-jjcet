@@ -6,6 +6,7 @@ install_log.txt
 install.log
 server_log.txt
 .env
+.env.local
 backend/serviceAccountKey.json
 backend/prisma/
 *-firebase-adminsdk-*.json
