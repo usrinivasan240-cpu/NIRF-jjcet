@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy, where } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { FileText, Plus, Eye, Send, Trash2, Download, Printer } from "lucide-react";
+import { FileText, Plus, Eye, Send, Trash2, Download, Printer, Edit, Save, X } from "lucide-react";
+
+const LOGO_URL = "/images/jjcet-logo.png";
 
 const REPORT_TYPES = [
   { value: "staff", label: "Staff Reports" },
@@ -43,8 +45,11 @@ export default function ReportsPage() {
   const [showGenerate, setShowGenerate] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [showViewer, setShowViewer] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<any>(null);
   const [selectedReport, setSelectedReport] = useState<any>(null);
   const [form, setForm] = useState({ title: "", type: "staff", category: "", academicYear: "2024-25", content: "" });
+  const reportPrintRef = useRef<HTMLDivElement>(null);
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "null") : null;
 
@@ -101,37 +106,82 @@ export default function ReportsPage() {
 
   const viewReport = (r: any) => {
     setSelectedReport(r);
+    setEditForm({ ...r });
+    setIsEditing(false);
     setShowViewer(true);
   };
 
+  const startEdit = () => {
+    setEditForm({ ...selectedReport });
+    setIsEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditForm({ ...selectedReport });
+    setIsEditing(false);
+  };
+
+  const saveEdit = async () => {
+    if (!editForm) return;
+    try {
+      await setDoc(doc(db, "reports", editForm.id), {
+        title: editForm.title,
+        type: editForm.type,
+        category: editForm.category,
+        academicYear: editForm.academicYear,
+        content: editForm.content,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      setSelectedReport(editForm);
+      setIsEditing(false);
+      loadReports();
+    } catch (e) {
+      console.error("Save edit error:", e);
+      alert("Error saving changes: " + (e as Error).message);
+    }
+  };
+
   const printReport = () => {
-    if (!selectedReport) return;
+    const el = reportPrintRef.current;
+    if (!el) return;
     const w = window.open("", "_blank");
     if (!w) return;
-    const content = selectedReport.content || "No content";
-    w.document.write(`
-      <html><head><title>${selectedReport.title}</title>
-      <style>body{font-family:serif;max-width:800px;margin:0 auto;padding:40px;}
-      .header{text-align:center;border-bottom:2px solid #000;padding-bottom:20px;margin-bottom:20px;}
-      .logo{font-size:24px;font-weight:bold;}
-      .meta{font-size:12px;color:#666;margin-top:10px;}
-      .content{margin-top:30px;line-height:1.8;white-space:pre-wrap;}
-      .signature-section{margin-top:60px;display:flex;justify-content:space-between;}
-      .sig-box{width:200px;border-top:1px solid #000;padding-top:5px;text-align:center;font-size:12px;}
-      @media print{body{padding:20px;}}</style></head><body>
-      <div class="header"><div class="logo">J.J. College of Engineering & Technology</div>
-      <div>NIRF ERP Pro - Official Report</div></div>
-      <div class="meta">Report: ${selectedReport.title}<br>Type: ${selectedReport.type}<br>Academic Year: ${selectedReport.academicYear || "N/A"}<br>Status: ${selectedReport.status}<br>Generated: ${new Date().toLocaleString()}</div>
-      <div class="content">${content}</div>
-      <div class="signature-section">
-        <div class="sig-box">Prepared By<br><br><br>Staff</div>
-        <div class="sig-box">Verified By<br><br><br>HOD</div>
-        <div class="sig-box">Verified By<br><br><br>Vice Principal</div>
-        <div class="sig-box">Approved By<br><br><br>Principal</div>
-      </div>
-      </body></html>`);
+    w.document.write(`<!DOCTYPE html><html><head><title>${selectedReport?.title || "Report"}</title>
+<style>
+@page{size:A3 portrait;margin:5mm;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:1.3;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+.header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:white;padding:12px 20px;display:flex;align-items:center;gap:15px;}
+.header img{width:80px;height:80px;border-radius:50%;background:white;padding:4px;object-fit:contain;}
+.header-center{text-align:center;flex:1;}
+.header-center h1{font-size:24px;letter-spacing:4px;font-weight:900;margin-bottom:2px;}
+.header-center p{font-size:14px;letter-spacing:2px;color:#bfdbfe;}
+.header-center .autonomous{font-size:13px;color:#fbbf24;font-weight:bold;margin:2px 0;}
+.header-center .group{background:#f97316;color:white;display:inline-block;padding:2px 14px;border-radius:3px;font-size:10px;font-weight:bold;}
+.header-right{text-align:right;font-size:8px;color:#bfdbfe;}
+.report-title-bar{background:#1e3a8a;color:white;padding:6px 15px;font-size:12px;font-weight:bold;letter-spacing:1px;text-align:center;}
+.meta-table{width:100%;border-collapse:collapse;margin:10px 0;}
+.meta-table td{padding:4px 10px;border:1px solid #e2e8f0;font-size:9px;}
+.meta-table td:first-child{background:#e2e8f0;font-weight:bold;width:120px;}
+.content-area{padding:12px 15px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;margin:10px 0;min-height:200px;}
+.content-area h3{color:#1e3a8a;margin-bottom:8px;font-size:11px;border-bottom:2px solid #1e3a8a;padding-bottom:4px;}
+.content-text{font-size:9px;line-height:1.6;white-space:pre-wrap;}
+.status-badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:8px;font-weight:bold;}
+.status-draft{background:#fef3c7;color:#92400e;}
+.status-submitted{background:#dbeafe;color:#1e40af;}
+.status-approved{background:#dcfce7;color:#166534;}
+.status-locked{background:#fee2e2;color:#991b1b;}
+.signature-section{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;margin-top:15px;}
+.sig-block{text-align:center;padding:8px;border:1px solid #e2e8f0;background:#f8fafc;}
+.sig-block .title{background:#1e3a8a;color:white;padding:4px 8px;font-size:8px;font-weight:bold;margin:-8px -8px 8px -8px;}
+.sig-block .role{font-weight:bold;font-size:9px;margin-top:5px;}
+.sig-block .name{font-size:8px;color:#666;}
+.sig-line{border-bottom:1px dashed #999;height:30px;margin:8px 0;}
+.footer{background:#1e3a8a;color:white;padding:8px 20px;display:flex;justify-content:space-between;align-items:center;font-size:8px;margin-top:15px;}
+@media print{body{margin:0;padding:0;}}
+</style></head><body>` + el.innerHTML + `</body></html>`);
     w.document.close();
-    w.print();
+    setTimeout(() => w.print(), 300);
   };
 
   const downloadCSV = () => {
@@ -214,22 +264,149 @@ export default function ReportsPage() {
         </Dialog>
 
         <Dialog open={showViewer} onOpenChange={setShowViewer}>
-          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{selectedReport?.title}</DialogTitle>
+              <div className="flex items-center justify-between">
+                <DialogTitle>{isEditing ? "Edit Report" : selectedReport?.title}</DialogTitle>
+                <div className="flex gap-2">
+                  {!isEditing ? (
+                    <>
+                      <Button size="sm" variant="outline" onClick={startEdit}><Edit className="h-4 w-4 mr-1" />Edit</Button>
+                      <Button size="sm" onClick={printReport}><Printer className="h-4 w-4 mr-1" />Print / PDF</Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button size="sm" variant="outline" onClick={cancelEdit}><X className="h-4 w-4 mr-1" />Cancel</Button>
+                      <Button size="sm" onClick={saveEdit}><Save className="h-4 w-4 mr-1" />Save Changes</Button>
+                    </>
+                  )}
+                </div>
+              </div>
             </DialogHeader>
             {selectedReport && (
               <div className="space-y-4">
-                <div className="flex gap-4 text-sm text-muted-foreground">
-                  <span>Type: <Badge variant="secondary">{selectedReport.type}</Badge></span>
-                  <span>Status: <Badge>{selectedReport.status}</Badge></span>
-                  <span>Level: {selectedReport.currentLevel}</span>
-                </div>
-                <div className="p-4 bg-muted rounded-lg">
-                  <pre className="whitespace-pre-wrap font-sans text-sm">{selectedReport.content || "No content"}</pre>
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={printReport}><Printer className="h-4 w-4 mr-2" />Print / PDF</Button>
+                {isEditing ? (
+                  <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700 font-medium">Edit report fields below, then save or print.</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs">Report Title</Label>
+                        <Input value={editForm?.title || ""} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Report Type</Label>
+                        <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={editForm?.type || ""} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}>
+                          {REPORT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Category</Label>
+                        <Input value={editForm?.category || ""} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Academic Year</Label>
+                        <Input value={editForm?.academicYear || ""} onChange={(e) => setEditForm({ ...editForm, academicYear: e.target.value })} />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Report Content</Label>
+                      <textarea className="w-full h-48 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono" value={editForm?.content || ""} onChange={(e) => setEditForm({ ...editForm, content: e.target.value })} placeholder="Enter report content..." />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-muted rounded-lg">
+                    <div className="flex gap-4 text-sm text-muted-foreground mb-3">
+                      <span>Type: <Badge variant="secondary">{selectedReport.type}</Badge></span>
+                      <span>Status: <Badge>{selectedReport.status}</Badge></span>
+                      <span>Level: {selectedReport.currentLevel}</span>
+                      <span>Year: {selectedReport.academicYear}</span>
+                    </div>
+                    <pre className="whitespace-pre-wrap font-sans text-sm">{selectedReport.content || "No content"}</pre>
+                  </div>
+                )}
+
+                <div ref={reportPrintRef}>
+                  <div style={{ padding: 0, maxWidth: "100%", overflow: "hidden" }}>
+                    <div style={{ background: "linear-gradient(135deg, #1e3a8a, #2563eb)", color: "white", padding: "12px 20px", display: "flex", alignItems: "center", gap: "15px" }}>
+                      <img src={LOGO_URL} alt="JJCET" style={{ width: "80px", height: "80px", borderRadius: "50%", background: "white", padding: "4px", objectFit: "contain" }} />
+                      <div style={{ flex: 1, textAlign: "center" }}>
+                        <h1 style={{ fontSize: "24px", letterSpacing: "4px", fontWeight: "900", marginBottom: "2px" }}>J.J. COLLEGE</h1>
+                        <p style={{ fontSize: "14px", letterSpacing: "2px", color: "#bfdbfe" }}>ENGINEERING AND TECHNOLOGY</p>
+                        <p style={{ fontSize: "13px", color: "#fbbf24", fontWeight: "bold", margin: "2px 0" }}>AUTONOMOUS</p>
+                        <span style={{ background: "#f97316", color: "white", padding: "2px 14px", borderRadius: "3px", fontSize: "10px", fontWeight: "bold" }}>SOWDAMBIKAA GROUP OF INSTITUTIONS</span>
+                      </div>
+                      <div style={{ textAlign: "right", fontSize: "8px", color: "#bfdbfe" }}>
+                        <p>Report ID: {isEditing ? editForm?.id : selectedReport?.id}</p>
+                        <p>Academic Year: {isEditing ? editForm?.academicYear : selectedReport?.academicYear}</p>
+                        <p>Generated: {new Date().toLocaleDateString("en-IN")}</p>
+                      </div>
+                    </div>
+
+                    <div style={{ background: "#1e3a8a", color: "white", padding: "6px 15px", fontSize: "12px", fontWeight: "bold", letterSpacing: "1px", textAlign: "center" }}>
+                      {(isEditing ? editForm?.title : selectedReport?.title) || "OFFICIAL REPORT"} – {(isEditing ? editForm?.academicYear : selectedReport?.academicYear) || "2024-25"}
+                    </div>
+
+                    <table className="meta-table" style={{ width: "100%", borderCollapse: "collapse", margin: "10px 0" }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold", width: "120px" }}>Report Title</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{isEditing ? editForm?.title : selectedReport?.title}</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold", width: "120px" }}>Report Type</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{isEditing ? editForm?.type : selectedReport?.type}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Category</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{(isEditing ? editForm?.category : selectedReport?.category)?.replace(/_/g, " ")}</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Status</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>
+                            <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "3px", fontSize: "8px", fontWeight: "bold", background: (isEditing ? editForm?.status : selectedReport?.status) === "DRAFT" ? "#fef3c7" : (isEditing ? editForm?.status : selectedReport?.status) === "SUBMITTED" ? "#dbeafe" : "#dcfce7", color: (isEditing ? editForm?.status : selectedReport?.status) === "DRAFT" ? "#92400e" : (isEditing ? editForm?.status : selectedReport?.status) === "SUBMITTED" ? "#1e40af" : "#166534" }}>
+                              {isEditing ? editForm?.status : selectedReport?.status}
+                            </span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Department</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{isEditing ? editForm?.departmentId : selectedReport?.departmentId}</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Generated By</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{user?.name || "System"}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Date Created</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{isEditing ? editForm?.createdAt : selectedReport?.createdAt}</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px", background: "#e2e8f0", fontWeight: "bold" }}>Last Updated</td>
+                          <td style={{ padding: "4px 10px", border: "1px solid #e2e8f0", fontSize: "9px" }}>{isEditing ? editForm?.updatedAt : selectedReport?.updatedAt}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <div style={{ padding: "12px 15px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "4px", margin: "10px 0", minHeight: "200px" }}>
+                      <h3 style={{ color: "#1e3a8a", marginBottom: "8px", fontSize: "11px", borderBottom: "2px solid #1e3a8a", paddingBottom: "4px" }}>Report Content</h3>
+                      <div style={{ fontSize: "9px", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{isEditing ? editForm?.content : selectedReport?.content || "No content available."}</div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0", marginTop: "15px" }}>
+                      {[
+                        { title: "PREPARED BY", role: "Staff", name: user?.name || "Staff Member" },
+                        { title: "VERIFIED BY", role: "HOD", name: "Dr. A. HOD Name" },
+                        { title: "VERIFIED BY", role: "Vice Principal", name: "Dr. B. Vice Principal" },
+                        { title: "APPROVED BY", role: "Principal", name: "Dr. C. Principal" },
+                      ].map((s, i) => (
+                        <div key={i} style={{ textAlign: "center", padding: "8px", border: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                          <div style={{ background: "#1e3a8a", color: "white", padding: "4px 8px", fontSize: "8px", fontWeight: "bold", margin: "-8px -8px 8px -8px" }}>{s.title}</div>
+                          <div style={{ borderBottom: "1px dashed #999", height: "30px", margin: "8px 0" }} />
+                          <p style={{ fontWeight: "bold", fontSize: "9px", marginTop: "5px" }}>{s.role}</p>
+                          <p style={{ fontSize: "8px", color: "#666" }}>{s.name}</p>
+                          <p style={{ fontSize: "7px", color: "#999", marginTop: "2px" }}>Date: {new Date().toLocaleDateString("en-IN")}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ background: "#1e3a8a", color: "white", padding: "8px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "8px", marginTop: "15px" }}>
+                      <span>Pudukottai Main Road, Puliampatti, Trichy – 620 009, Tamil Nadu, India.</span>
+                      <span>0431 – 2660566</span>
+                      <span>www.jjcet.ac.in</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
