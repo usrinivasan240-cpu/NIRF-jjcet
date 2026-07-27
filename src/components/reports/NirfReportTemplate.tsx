@@ -133,6 +133,16 @@ export default function NirfReportTemplate({
       lineHeight: "1.5",
       color: "#1a1a1a",
     }}>
+      <style>{`
+        @page { size: A4 portrait; margin: 12mm 15mm; }
+        @media print {
+          body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          table { page-break-inside: avoid; }
+          tr { page-break-inside: avoid; }
+          h1, h2, h3, h4 { page-break-after: avoid; }
+          img { max-width: 100%; }
+        }
+      `}</style>
       {/* ═══════════════ HEADER ═══════════════ */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
         <tbody>
