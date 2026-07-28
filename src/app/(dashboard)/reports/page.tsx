@@ -600,10 +600,10 @@ tr{page-break-inside:avoid;}
 
         {/* Fullscreen Report Viewer Dialog */}
         <Dialog open={showViewer} onOpenChange={setShowViewer}>
-          <DialogContent className="w-full h-full max-w-full p-0 m-0 rounded-none border-none gap-0" style={{ maxWidth: "100vw", maxHeight: "100vh", height: "100vh" }}>
-            <DialogHeader className="flex flex-row items-center justify-between px-4 py-3 border-b shrink-0">
-              <DialogTitle>{isEditing ? "Edit Report Configuration" : selectedReport?.title || "NIRF Report"}</DialogTitle>
-              <div className="flex gap-2">
+          <DialogContent className="flex flex-col p-0 m-0 rounded-none border-none gap-0 w-screen h-screen max-w-full max-h-full">
+            <DialogHeader className="flex flex-row items-center justify-between px-4 py-2 border-b shrink-0">
+              <DialogTitle className="truncate">{isEditing ? "Edit Report Configuration" : selectedReport?.title || "NIRF Report"}</DialogTitle>
+              <div className="flex gap-2 shrink-0">
                 {!isEditing ? (
                   <>
                     <Button size="sm" variant="outline" onClick={startEdit}><Edit className="h-4 w-4 mr-1" />Edit</Button>
@@ -618,7 +618,7 @@ tr{page-break-inside:avoid;}
                 )}
               </div>
             </DialogHeader>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-auto min-h-0">
               {isEditing ? (
                 <div className="p-6">
                   <ConfigForm config={viewerConfig} setConfig={setViewerConfig} />
@@ -631,7 +631,7 @@ tr{page-break-inside:avoid;}
                       <p className="ml-3 text-lg">Loading NIRF report data...</p>
                     </div>
                   ) : nirfReportData && nirfReportMeta ? (
-                    <div ref={reportPrintRef} className="bg-white">
+                    <div ref={reportPrintRef} className="bg-white flex justify-center">
                       <NirfReportTemplate config={viewerConfig} data={nirfReportData} meta={nirfReportMeta} />
                     </div>
                   ) : (

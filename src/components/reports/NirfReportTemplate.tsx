@@ -126,15 +126,17 @@ export default function NirfReportTemplate({
 
   return (
     <div style={{
-      width: "210mm",
-      minHeight: "297mm",
+      maxWidth: "210mm",
+      width: "100%",
       margin: "0 auto",
-      padding: "15mm 18mm",
+      padding: "12px 16px",
       background: "white",
       fontFamily: "'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
-      fontSize: "11px",
-      lineHeight: "1.5",
+      fontSize: "10px",
+      lineHeight: "1.4",
       color: "#1a1a1a",
+      boxSizing: "border-box" as const,
+      overflowX: "hidden" as const,
     }}>
       <style>{`
         @page { size: A4 portrait; margin: 12mm 15mm; }
@@ -147,28 +149,28 @@ export default function NirfReportTemplate({
         }
       `}</style>
       {/* ═══════════════ HEADER ═══════════════ */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px", tableLayout: "fixed" }}>
         <tbody>
           <tr>
-            <td style={{ width: "70px", verticalAlign: "top", paddingRight: "12px" }}>
+            <td style={{ width: "60px", verticalAlign: "top", paddingRight: "10px" }}>
               <img
                 src={LOGO_URL}
                 alt="JJCET"
-                style={{ width: "65px", height: "65px", borderRadius: "50%", border: "2px solid #1e3a8a" }}
+                style={{ width: "55px", height: "55px", borderRadius: "50%", border: "2px solid #1e3a8a" }}
               />
-              <p style={{ fontSize: "7px", color: "#666", marginTop: "2px", textAlign: "center" }}>ESTD. 1994</p>
+              <p style={{ fontSize: "6px", color: "#666", marginTop: "2px", textAlign: "center" }}>ESTD. 1994</p>
             </td>
             <td style={{ verticalAlign: "top", textAlign: "center" }}>
-              <h1 style={{ fontSize: "18px", fontWeight: "800", color: "#1e3a8a", margin: 0, letterSpacing: "1px" }}>
+              <h1 style={{ fontSize: "15px", fontWeight: "800", color: "#1e3a8a", margin: 0, letterSpacing: "0.5px", whiteSpace: "nowrap" }}>
                 J.J College of Engineering and Technology
               </h1>
-              <p style={{ fontSize: "12px", color: "#1e3a8a", margin: "2px 0", fontWeight: "600" }}>Autonomous</p>
-              <p style={{ fontSize: "11px", color: "#333", margin: "4px 0 0 0", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              <p style={{ fontSize: "11px", color: "#1e3a8a", margin: "1px 0", fontWeight: "600" }}>Autonomous</p>
+              <p style={{ fontSize: "10px", color: "#333", margin: "2px 0 0 0", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                 Department NIRF Performance Report
               </p>
-              <p style={{ fontSize: "10px", color: "#555", margin: "2px 0 0 0" }}>Academic Year {config.academicYear}</p>
+              <p style={{ fontSize: "9px", color: "#555", margin: "1px 0 0 0" }}>Academic Year {config.academicYear}</p>
             </td>
-            <td style={{ width: "160px", verticalAlign: "top", textAlign: "right", fontSize: "9px", color: "#555" }}>
+            <td style={{ width: "140px", verticalAlign: "top", textAlign: "right", fontSize: "8px", color: "#555" }}>
               <p style={{ margin: "1px 0" }}><strong>Report ID:</strong> {meta?.reportId}</p>
               <p style={{ margin: "1px 0" }}><strong>Generated:</strong> {meta?.generatedOn}</p>
               <p style={{ margin: "1px 0" }}><strong>Time:</strong> {meta?.generatedAt}</p>
@@ -514,40 +516,43 @@ const tableStyle: React.CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
   marginBottom: "6px",
-  fontSize: "10px",
+  fontSize: "9px",
+  tableLayout: "fixed",
 };
 
 const thStyle: React.CSSProperties = {
   background: "#e2e8f0",
-  padding: "5px 8px",
+  padding: "4px 6px",
   textAlign: "left",
   border: "1px solid #cbd5e1",
   fontWeight: "700",
-  fontSize: "9px",
+  fontSize: "8px",
   color: "#1e3a8a",
   textTransform: "uppercase",
   letterSpacing: "0.3px",
+  wordBreak: "break-word" as const,
 };
 
 const tdStyle: React.CSSProperties = {
-  padding: "5px 8px",
+  padding: "4px 6px",
   border: "1px solid #e2e8f0",
-  fontSize: "10px",
+  fontSize: "9px",
+  wordBreak: "break-word" as const,
 };
 
 const labelCellStyle: React.CSSProperties = {
-  padding: "4px 8px",
+  padding: "3px 6px",
   border: "1px solid #e2e8f0",
   fontWeight: "700",
-  fontSize: "9px",
+  fontSize: "8px",
   color: "#475569",
   width: "25%",
   background: "#f8fafc",
 };
 
 const valueCellStyle: React.CSSProperties = {
-  padding: "4px 8px",
+  padding: "3px 6px",
   border: "1px solid #e2e8f0",
-  fontSize: "10px",
+  fontSize: "9px",
   width: "25%",
 };
