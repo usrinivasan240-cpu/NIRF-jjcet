@@ -31,7 +31,7 @@ const DEFAULT_CONFIG: ReportConfig = {
     "Departmental performance is satisfactory with scope for further enhancement.",
     "Focus on publications, patents, consultancy, placements and industry collaborations.",
   ],
-  sections: { summary: true, deptTable: true, progress: true, trend: true, remarks: true, signatures: true },
+  sections: { summary: true, deptTable: true, progress: true, trend: true, remarks: true, signatures: true, pendingActivities: true, supportingDocs: true },
 };
 
 function ConfigStep({ config, setConfig }: { config: ReportConfig; setConfig: (c: ReportConfig) => void }) {
@@ -47,7 +47,7 @@ function ConfigStep({ config, setConfig }: { config: ReportConfig; setConfig: (c
       <div className="space-y-2">
         <Label className="text-xs font-semibold">Sections to Include</Label>
         <div className="grid grid-cols-2 gap-2">
-          {([["summary", "Dept Info & Summary"], ["progress", "NIRF Parameters"], ["deptTable", "Target vs Achievement"], ["trend", "Score Trend"], ["remarks", "Remarks"], ["signatures", "Signatures"]] as const).map(([k, l]) => (
+          {([["summary", "Dept Info & Summary"], ["progress", "NIRF Parameters"], ["deptTable", "Target vs Achievement"], ["trend", "Score Trend"], ["pendingActivities", "Pending Activities"], ["supportingDocs", "Supporting Documents"], ["remarks", "Remarks"], ["signatures", "Signatures"]] as const).map(([k, l]) => (
             <label key={k} className="flex items-center gap-2 text-xs cursor-pointer">
               <input type="checkbox" checked={config.sections[k]} onChange={e => uS(k, e.target.checked)} className="rounded" />{l}
             </label>

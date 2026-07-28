@@ -28,7 +28,7 @@ const DEFAULT_CONFIG: ReportConfig = {
     "Departmental performance is satisfactory with scope for further enhancement.",
     "Focus on publications, patents, consultancy, placements and industry collaborations.",
   ],
-  sections: { summary: true, deptTable: true, progress: true, trend: true, remarks: true, signatures: true },
+  sections: { summary: true, deptTable: true, progress: true, trend: true, remarks: true, signatures: true, pendingActivities: true, supportingDocs: true },
 };
 
 export default function NIRFReportPage() {
@@ -252,6 +252,8 @@ tr{page-break-inside:avoid;}
                   ["progress", "NIRF Parameters"],
                   ["deptTable", "Target vs Achievement"],
                   ["trend", "Score Trend"],
+                  ["pendingActivities", "Pending Activities"],
+                  ["supportingDocs", "Supporting Documents"],
                   ["remarks", "Remarks"],
                   ["signatures", "Signatures"],
                 ] as const).map(([key, label]) => (

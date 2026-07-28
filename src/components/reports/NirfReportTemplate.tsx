@@ -37,6 +37,8 @@ export interface ReportConfig {
     trend: boolean;
     remarks: boolean;
     signatures: boolean;
+    pendingActivities: boolean;
+    supportingDocs: boolean;
   };
 }
 
@@ -364,7 +366,7 @@ export default function NirfReportTemplate({
       )}
 
       {/* ═══════════════ SECTION 5: Pending Activities ═══════════════ */}
-      {config.sections.deptTable && pendingItems.length > 0 && (
+      {config.sections.pendingActivities && config.sections.deptTable && pendingItems.length > 0 && (
         <>
           <SectionTitle num={5} title="PENDING ACTIVITIES" />
           <div style={{ padding: "8px 12px", border: "1px solid #E0E0E0", background: "#FFF8E1", marginBottom: "8px" }}>
@@ -376,7 +378,7 @@ export default function NirfReportTemplate({
       )}
 
       {/* ═══════════════ SECTION 6: Supporting Documents ═══════════════ */}
-      {config.sections.summary && (
+      {config.sections.supportingDocs && (
         <>
           <SectionTitle num={6} title="SUPPORTING DOCUMENTS" />
           <table style={tableStyle}>
