@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy, getDoc } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,44 @@ import type { ReportConfig, ReportData, ReportMeta } from "@/components/reports/
 
 function safe(v: number) { return isNaN(v) || !isFinite(v) ? 0 : v; }
 function genId() { return "rpt-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+function serializeReportData(data: ReportData) {
+  return {
+    deptRows: (data.deptRows || []).map((r: any) => ({
+      dept: r.dept ? { id: r.dept.id, name: r.dept.name, code: r.dept.code } : null,
+      phd: r.phd, pubs: r.pubs, granted: r.granted,
+      tlr: r.tlr, rpc: r.rpc, go: r.go, oi: r.oi, pr: r.pr,
+      total: r.total, target: r.target, achieved: r.achieved, pct: r.pct,
+      dFCount: r.dF?.length || 0, dPCount: r.dP?.length || 0, dPatCount: r.dPat?.length || 0, dRCount: r.dR?.length || 0, dTCount: r.dT?.length || 0,
+    })),
+    instTlr: data.instTlr, instRpc: data.instRpc, instGo: data.instGo, instOi: data.instOi, instPr: data.instPr, instTotal: data.instTotal,
+    totalTarget: data.totalTarget, totalAchieved: data.totalAchieved,
+    categories: data.categories || null,
+    allFacCount: data.allFac?.length || 0, allStuCount: data.allStu?.length || 0,
+    allPubsCount: data.allPubs?.length || 0, allPatsCount: data.allPats?.length || 0, allResCount: data.allRes?.length || 0,
+    deptId: data.deptId || null,
+  };
+}
+
+function deserializeReportData(raw: any): ReportData {
+  return {
+    deptRows: (raw.deptRows || []).map((r: any) => ({
+      dept: r.dept, dF: Array(r.dFCount || 0).fill({}), dP: Array(r.dPCount || 0).fill({}),
+      dPat: Array(r.dPatCount || 0).fill({}), dR: Array(r.dRCount || 0).fill({}), dT: Array(r.dTCount || 0).fill({}),
+      phd: r.phd, pubs: r.pubs, granted: r.granted,
+      tlr: r.tlr, rpc: r.rpc, go: r.go, oi: r.oi, pr: r.pr,
+      total: r.total, target: r.target, achieved: r.achieved, pct: r.pct,
+    })),
+    instTlr: raw.instTlr || 0, instRpc: raw.instRpc || 0, instGo: raw.instGo || 0, instOi: raw.instOi || 0, instPr: raw.instPr || 0, instTotal: raw.instTotal || 0,
+    totalTarget: raw.totalTarget || 0, totalAchieved: raw.totalAchieved || 0,
+    categories: raw.categories || undefined,
+    allPubs: Array(raw.allPubsCount || 0).fill({}), allPats: Array(raw.allPatsCount || 0).fill({}),
+    allRes: Array(raw.allResCount || 0).fill({}),
+    allFac: Array(raw.allFacCount || 0).fill({}), allStu: Array(raw.allStuCount || 0).fill({}),
+    allTgt: [],
+    deptId: raw.deptId || null,
+  };
+}
 
 const DEFAULT_CONFIG: ReportConfig = {
   academicYear: "2024-25",
@@ -412,6 +450,7 @@ export default function ReportsPage() {
         type: "nirf",
         category: "nirf_submission_report",
         config: { ...config },
+        reportData: serializeReportData(editData),
         status: "DRAFT",
         currentLevel: "STAFF",
         creatorId: user?.id || "1",
@@ -483,10 +522,15 @@ export default function ReportsPage() {
     setNirfLoading(true);
     setNirfReportData(null);
     try {
-      const raw = await loadRawData();
-      raw.instTotal = raw.instTlr + raw.instRpc + raw.instGo + raw.instOi + raw.instPr;
-      setNirfReportData(raw);
-      setNirfReportMeta(buildMeta(r.id || "DRAFT", sc, r, raw));
+      let data: ReportData;
+      if (r.reportData) {
+        data = deserializeReportData(r.reportData);
+      } else {
+        data = await loadRawData();
+      }
+      data.instTotal = data.instTlr + data.instRpc + data.instGo + data.instOi + data.instPr;
+      setNirfReportData(data);
+      setNirfReportMeta(buildMeta(r.id || "DRAFT", sc, r, data));
     } catch (e) { console.error(e); }
     setNirfLoading(false);
   };
@@ -635,7 +679,11 @@ export default function ReportsPage() {
                     <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}><X className="h-4 w-4 mr-1" />Cancel</Button>
                     <Button size="sm" onClick={async () => {
                       if (!selectedReport) return;
-                      await setDoc(doc(db, "reports", selectedReport.id), { config: { ...viewerConfig }, updatedAt: new Date().toISOString() }, { merge: true });
+                      await setDoc(doc(db, "reports", selectedReport.id), {
+                        config: { ...viewerConfig },
+                        reportData: nirfReportData ? serializeReportData(nirfReportData) : undefined,
+                        updatedAt: new Date().toISOString()
+                      }, { merge: true });
                       setIsEditing(false);
                       loadReports();
                     }}><Save className="h-4 w-4 mr-1" />Save</Button>
