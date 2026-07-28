@@ -376,7 +376,24 @@ export default function ReportsPage() {
 
   const submitReport = async (id: string) => {
     try {
-      await setDoc(doc(db, "reports", id), { status: "SUBMITTED", submittedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
+      const ts = new Date().toISOString();
+      await setDoc(doc(db, "reports", id), {
+        status: "SUBMITTED",
+        currentLevel: "STAFF",
+        submittedAt: ts,
+        updatedAt: ts,
+      }, { merge: true });
+      const approvalId = "apr-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      await setDoc(doc(db, "approvals", approvalId), {
+        reportId: id,
+        userId: user?.id || "1",
+        userName: user?.name || "Staff",
+        userRole: user?.role || "DEPARTMENT_STAFF",
+        level: "STAFF",
+        status: "PENDING",
+        comment: "Initial submission by staff",
+        createdAt: ts,
+      });
       loadReports();
     } catch (e) {
       console.error("Submit error:", e);
@@ -507,33 +524,58 @@ tr{page-break-inside:avoid;}
                   <tr className="border-b">
                     <th className="p-4 text-left">Title</th>
                     <th className="p-4 text-left">Type</th>
-                    <th className="p-4 text-left">Category</th>
                     <th className="p-4 text-left">Status</th>
-                    <th className="p-4 text-left">Level</th>
+                    <th className="p-4 text-left">Workflow Level</th>
+                    <th className="p-4 text-left">Progress</th>
                     <th className="p-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {reports.map((r) => (
-                    <tr key={r.id} className="border-b hover:bg-muted/50">
-                      <td className="p-4 font-medium">{r.title}</td>
-                      <td className="p-4"><Badge variant="secondary">{r.type}</Badge></td>
-                      <td className="p-4">{r.category?.replace(/_/g, " ")}</td>
-                      <td className="p-4">
-                        <Badge variant={r.status === "LOCKED" ? "default" : r.status === "SUBMITTED" ? "secondary" : "outline"}>
-                          {r.status}
-                        </Badge>
-                      </td>
-                      <td className="p-4">{r.currentLevel}</td>
-                      <td className="p-4 text-right">
-                        <div className="flex gap-1 justify-end">
-                          <Button size="sm" variant="ghost" onClick={() => viewReport(r)}><Eye className="h-4 w-4" /></Button>
-                          {r.status === "DRAFT" && <Button size="sm" variant="ghost" onClick={() => submitReport(r.id)}><Send className="h-4 w-4" /></Button>}
-                          {r.status === "DRAFT" && <Button size="sm" variant="ghost" onClick={() => deleteReport(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {reports.map((r) => {
+                    const levelOrder = ["STAFF", "HOD", "VP", "PRINCIPAL", "LOCKED"];
+                    const currentIdx = levelOrder.indexOf(r.currentLevel || "STAFF");
+                    const progressPct = Math.min(100, ((currentIdx + 1) / levelOrder.length) * 100);
+                    const statusBadge = r.status === "LOCKED"
+                      ? "bg-green-100 text-green-800"
+                      : r.status === "SUBMITTED"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-gray-100 text-gray-800";
+                    return (
+                      <tr key={r.id} className="border-b hover:bg-muted/50">
+                        <td className="p-4 font-medium">{r.title}</td>
+                        <td className="p-4"><Badge variant="secondary">{r.type}</Badge></td>
+                        <td className="p-4">
+                          <Badge className={statusBadge}>{r.status}</Badge>
+                        </td>
+                        <td className="p-4">
+                          <Badge className={levelOrder.includes(r.currentLevel) ? (r.currentLevel === "LOCKED" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800") : "bg-gray-100 text-gray-800"}>
+                            {r.currentLevel || "STAFF"}
+                          </Badge>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden max-w-[100px]">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${progressPct}%`,
+                                  backgroundColor: r.status === "LOCKED" ? "#22c55e" : r.status === "SUBMITTED" ? "#3b82f6" : "#9ca3af",
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs text-muted-foreground">{currentIdx + 1}/{levelOrder.length}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex gap-1 justify-end">
+                            <Button size="sm" variant="ghost" onClick={() => viewReport(r)}><Eye className="h-4 w-4" /></Button>
+                            {r.status === "DRAFT" && <Button size="sm" variant="ghost" onClick={() => submitReport(r.id)}><Send className="h-4 w-4" /></Button>}
+                            {r.status === "DRAFT" && <Button size="sm" variant="ghost" onClick={() => deleteReport(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </CardContent>
