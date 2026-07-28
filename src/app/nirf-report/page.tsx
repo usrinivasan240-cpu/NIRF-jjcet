@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,11 +49,13 @@ export default function NIRFReportPage() {
   const [config, setConfig] = useState<ReportConfig>({ ...DEFAULT_CONFIG });
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "null") : null;
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const [logoUrl, setLogoUrl] = useState("/images/jjcet-logo.png");
 
   useEffect(() => {
     const loadAll = async () => {
       try {
-        const [depSnap, facSnap, pubSnap, patSnap, resSnap, stuSnap, tgtSnap] = await Promise.all([
+        const [depSnap, facSnap, pubSnap, patSnap, resSnap, stuSnap, tgtSnap, settingsSnap] = await Promise.all([
           getDocs(collection(db, "departments")),
           getDocs(collection(db, "faculties")),
           getDocs(collection(db, "publications")),
@@ -61,6 +63,7 @@ export default function NIRFReportPage() {
           getDocs(collection(db, "research")),
           getDocs(collection(db, "students")),
           getDocs(collection(db, "targets")),
+          getDoc(doc(db, "appSettings", "main")),
         ]);
         setDepartments(depSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         setFaculties(facSnap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -69,6 +72,7 @@ export default function NIRFReportPage() {
         setResearch(resSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         setStudents(stuSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         setTargets(tgtSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        if (settingsSnap.exists() && settingsSnap.data().logoUrl) setLogoUrl(settingsSnap.data().logoUrl);
       } catch (e) { console.error(e); }
       setLoading(false);
     };
@@ -216,54 +220,62 @@ tr{page-break-inside:avoid;}
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label className="text-xs mb-1 block">Academic Year</Label>
-                <Input value={config.academicYear} onChange={(e) => updateField("academicYear", e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs mb-1 block">Rank Band</Label>
-                <Input value={config.rankBand} onChange={(e) => updateField("rankBand", e.target.value)} />
-              </div>
+              {isSuperAdmin && (
+                <>
+                  <div>
+                    <Label className="text-xs mb-1 block">Academic Year</Label>
+                    <Input value={config.academicYear} onChange={(e) => updateField("academicYear", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1 block">Rank Band</Label>
+                    <Input value={config.rankBand} onChange={(e) => updateField("rankBand", e.target.value)} />
+                  </div>
+                </>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <Label className="text-xs">HOD Name</Label>
-                <Input value={config.hodName} onChange={(e) => updateField("hodName", e.target.value)} placeholder="HOD Name" className="text-xs" />
-                <textarea className="w-full h-16 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none" value={config.hodRemark} onChange={(e) => updateField("hodRemark", e.target.value)} placeholder="HOD Remark" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Vice Principal Name</Label>
-                <Input value={config.vpName} onChange={(e) => updateField("vpName", e.target.value)} placeholder="VP Name" className="text-xs" />
-                <textarea className="w-full h-16 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none" value={config.vpRemark} onChange={(e) => updateField("vpRemark", e.target.value)} placeholder="VP Remark" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Principal Name</Label>
-                <Input value={config.principalName} onChange={(e) => updateField("principalName", e.target.value)} placeholder="Principal Name" className="text-xs" />
-                <textarea className="w-full h-16 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none" value={config.principalRemark} onChange={(e) => updateField("principalRemark", e.target.value)} placeholder="Principal Remark" />
-              </div>
-            </div>
+            {isSuperAdmin && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs">HOD Name</Label>
+                    <Input value={config.hodName} onChange={(e) => updateField("hodName", e.target.value)} placeholder="HOD Name" className="text-xs" />
+                    <textarea className="w-full h-16 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none" value={config.hodRemark} onChange={(e) => updateField("hodRemark", e.target.value)} placeholder="HOD Remark" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Vice Principal Name</Label>
+                    <Input value={config.vpName} onChange={(e) => updateField("vpName", e.target.value)} placeholder="VP Name" className="text-xs" />
+                    <textarea className="w-full h-16 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none" value={config.vpRemark} onChange={(e) => updateField("vpRemark", e.target.value)} placeholder="VP Remark" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Principal Name</Label>
+                    <Input value={config.principalName} onChange={(e) => updateField("principalName", e.target.value)} placeholder="Principal Name" className="text-xs" />
+                    <textarea className="w-full h-16 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none" value={config.principalRemark} onChange={(e) => updateField("principalRemark", e.target.value)} placeholder="Principal Remark" />
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold">Sections to Include</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {([
-                  ["summary", "Dept Info & Summary"],
-                  ["progress", "NIRF Parameters"],
-                  ["deptTable", "Target vs Achievement"],
-                  ["trend", "Score Trend"],
-                  ["pendingActivities", "Pending Activities"],
-                  ["supportingDocs", "Supporting Documents"],
-                  ["remarks", "Remarks"],
-                  ["signatures", "Signatures"],
-                ] as const).map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2 text-xs cursor-pointer">
-                    <input type="checkbox" checked={config.sections[key]} onChange={(e) => updateSection(key, e.target.checked)} className="rounded" />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Sections to Include</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      ["summary", "Dept Info & Summary"],
+                      ["progress", "NIRF Parameters"],
+                      ["deptTable", "Target vs Achievement"],
+                      ["trend", "Score Trend"],
+                      ["pendingActivities", "Pending Activities"],
+                      ["supportingDocs", "Supporting Documents"],
+                      ["remarks", "Remarks"],
+                      ["signatures", "Signatures"],
+                    ] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2 text-xs cursor-pointer">
+                        <input type="checkbox" checked={config.sections[key]} onChange={(e) => updateSection(key, e.target.checked)} className="rounded" />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-end">
@@ -286,6 +298,7 @@ tr{page-break-inside:avoid;}
               config={config}
               data={reportData}
               meta={reportMeta}
+              logoUrl={logoUrl}
             />
           </div>
         )}

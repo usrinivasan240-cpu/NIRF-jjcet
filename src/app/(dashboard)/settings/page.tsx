@@ -1,13 +1,13 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { db } from "@/lib/firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, Save, Building2, Globe, Mail, Phone } from "lucide-react";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "/api";
+import { Settings, Save, Building2, Globe, Mail, Phone, Upload, Image } from "lucide-react";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
@@ -21,33 +21,44 @@ export default function SettingsPage() {
     naacGrade: "",
     academicYear: "2024-25",
     currentSemester: "Even",
-    logoUrl: "",
+    logoUrl: "/images/jjcet-logo.png",
   });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "null") : null;
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
   useEffect(() => {
-    fetch(`${API}/settings`, { headers })
-      .then(r => r.json())
-      .then(d => {
-        if (d.success && d.data) setSettings(prev => ({ ...prev, ...d.data }));
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const load = async () => {
+      try {
+        const snap = await getDoc(doc(db, "appSettings", "main"));
+        if (snap.exists()) setSettings(prev => ({ ...prev, ...snap.data() }));
+      } catch (e) { console.error("Load settings error:", e); }
+      setLoading(false);
+    };
+    load();
   }, []);
 
   const save = async () => {
     try {
-      await fetch(`${API}/settings`, { method: "PUT", headers, body: JSON.stringify(settings) });
+      await setDoc(doc(db, "appSettings", "main"), { ...settings, updatedAt: new Date().toISOString() });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {}
+    } catch (e) { console.error("Save settings error:", e); }
   };
 
-  const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "null") : null;
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 500 * 1024) { alert("Logo must be under 500KB"); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setSettings(prev => ({ ...prev, logoUrl: ev.target?.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <DashboardLayout>
@@ -58,6 +69,31 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
+          {isSuperAdmin && (
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Image className="h-5 w-5" />Report Logo</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">This logo appears on all generated NIRF reports. Max 500KB. Recommended: 200x200px square or circular.</p>
+                <div className="flex items-center gap-4">
+                  <div className="w-24 h-24 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/30 overflow-hidden">
+                    {settings.logoUrl ? (
+                      <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                    ) : (
+                      <Image className="h-8 w-8 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="h-4 w-4 mr-2" />Upload Logo
+                    </Button>
+                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                    <div><Label className="text-xs">Or paste image URL</Label><Input value={settings.logoUrl} onChange={(e) => setSettings({ ...settings, logoUrl: e.target.value })} placeholder="/images/jjcet-logo.png" className="text-xs mt-1" /></div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="h-5 w-5" />College Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">

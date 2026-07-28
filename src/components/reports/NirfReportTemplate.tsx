@@ -1,6 +1,7 @@
 "use client";
-
-const LOGO_URL = "/images/jjcet-logo.png";
+import { useState, useEffect } from "react";
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 function safe(v: number) { return isNaN(v) || !isFinite(v) ? 0 : v; }
 
@@ -95,11 +96,25 @@ export default function NirfReportTemplate({
   config,
   data,
   meta,
+  logoUrl: logoUrlProp,
 }: {
   config: ReportConfig;
   data: ReportData;
   meta: ReportMeta;
+  logoUrl?: string;
 }) {
+  const [logoUrl, setLogoUrl] = useState(logoUrlProp || "/images/jjcet-logo.png");
+
+  useEffect(() => {
+    if (logoUrlProp) { setLogoUrl(logoUrlProp); return; }
+    const fetchLogo = async () => {
+      try {
+        const snap = await getDoc(doc(db, "appSettings", "main"));
+        if (snap.exists() && snap.data().logoUrl) setLogoUrl(snap.data().logoUrl);
+      } catch {}
+    };
+    fetchLogo();
+  }, [logoUrlProp]);
   const {
     deptRows = [],
     instTlr = 0, instRpc = 0, instGo = 0, instOi = 0, instPr = 0, instTotal = 0,
@@ -201,7 +216,7 @@ export default function NirfReportTemplate({
           <tbody>
             <tr>
               <td style={{ width: "65px", verticalAlign: "middle", paddingRight: "12px" }}>
-                <img src={LOGO_URL} alt="JJCET" style={{ width: "55px", height: "55px", borderRadius: "50%", border: "2px solid white" }} />
+                <img src={logoUrl} alt="JJCET" style={{ width: "55px", height: "55px", borderRadius: "50%", border: "2px solid white" }} />
                 <p style={{ fontSize: "6px", color: "#BBDEFB", marginTop: "2px", textAlign: "center" }}>ESTD. 1994</p>
               </td>
               <td style={{ verticalAlign: "middle", textAlign: "center" }}>

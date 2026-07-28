@@ -331,6 +331,18 @@ export default function ReportsPage() {
   const reportIdRef = useRef<string>("");
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "null") : null;
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const [logoUrl, setLogoUrl] = useState("/images/jjcet-logo.png");
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const snap = await getDoc(doc(db, "appSettings", "main"));
+        if (snap.exists() && snap.data().logoUrl) setLogoUrl(snap.data().logoUrl);
+      } catch {}
+    };
+    fetchLogo();
+  }, []);
 
   const loadReports = async () => {
     try {
@@ -418,9 +430,27 @@ export default function ReportsPage() {
 
   const handleOpenGenerate = () => {
     setConfig({ ...DEFAULT_CONFIG });
-    setGenStep("config");
+    if (isSuperAdmin) {
+      setGenStep("config");
+    } else {
+      handleConfigNextForNonAdmin();
+    }
     setEditData(null);
     setShowGenerate(true);
+  };
+
+  const handleConfigNextForNonAdmin = async () => {
+    setLoadingData(true);
+    setGenStep("data");
+    try {
+      const raw = await loadRawData();
+      raw.instTotal = raw.instTlr + raw.instRpc + raw.instGo + raw.instOi + raw.instPr;
+      setEditData(raw);
+    } catch (e) {
+      console.error("Load data error:", e);
+      alert("Error loading data: " + (e as Error).message);
+    }
+    setLoadingData(false);
   };
 
   const handleConfigNext = async () => {
@@ -670,7 +700,7 @@ export default function ReportsPage() {
               <div className="flex gap-2 shrink-0">
                 {!isEditing ? (
                   <>
-                    <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}><Edit className="h-4 w-4 mr-1" />Edit</Button>
+                    {isSuperAdmin && <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}><Edit className="h-4 w-4 mr-1" />Edit</Button>}
                     <Button size="sm" onClick={printReport}><Printer className="h-4 w-4 mr-1" />Print</Button>
                     <Button size="sm" variant="ghost" onClick={() => setShowViewer(false)}><X className="h-4 w-4" /></Button>
                   </>
@@ -698,7 +728,7 @@ export default function ReportsPage() {
                 <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /><p className="ml-3">Loading...</p></div>
               ) : nirfReportData && nirfReportMeta ? (
                 <div ref={reportPrintRef} className="bg-white flex justify-center">
-                  <NirfReportTemplate config={viewerConfig} data={nirfReportData} meta={nirfReportMeta} />
+                  <NirfReportTemplate config={viewerConfig} data={nirfReportData} meta={nirfReportMeta} logoUrl={logoUrl} />
                 </div>
               ) : (
                 <div className="p-8 text-center text-muted-foreground"><AlertTriangle className="h-8 w-8 mx-auto mb-2 text-yellow-500" /><p>Failed to load data.</p></div>
