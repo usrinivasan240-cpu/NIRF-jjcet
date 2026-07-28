@@ -80,11 +80,25 @@ function ConfigStep({ config, setConfig }: { config: ReportConfig; setConfig: (c
 }
 
 function DataEditStep({ data, setData }: { data: ReportData; setData: (d: ReportData) => void }) {
-  const [activeTab, setActiveTab] = useState<"departments" | "institutional">("departments");
+  const [activeTab, setActiveTab] = useState<"departments" | "categories" | "institutional">("departments");
   const [selectedDept, setSelectedDept] = useState(0);
 
   const deptRows = data.deptRows || [];
   const row = deptRows[selectedDept];
+  const cat = data.categories || {
+    faculty: (data.allFac || []).length,
+    students: (data.allStu || []).length,
+    publications: (data.allPubs || []).filter((p: any) => p.status === "published").length,
+    scopus: (data.allPubs || []).filter((p: any) => p.isScopus).length,
+    patents: (data.allPats || []).filter((p: any) => p.status === "granted").length,
+    researchProjects: (data.allRes || []).length,
+    consultancy: 0, placements: 0, higherStudies: 0, mous: 0,
+    events: 0, fdp: 0, workshops: 0, seminars: 0,
+  };
+
+  const updateCat = (field: string, value: number) => {
+    setData({ ...data, categories: { ...cat, [field]: value } });
+  };
 
   const updateDeptRow = (field: string, value: any) => {
     const newRows = [...deptRows];
@@ -95,35 +109,26 @@ function DataEditStep({ data, setData }: { data: ReportData; setData: (d: Report
     const instGo = safe(newRows.reduce((s: number, r: any) => s + r.go, 0) / len);
     const instOi = safe(newRows.reduce((s: number, r: any) => s + r.oi, 0) / len);
     const instPr = safe(newRows.reduce((s: number, r: any) => s + r.pr, 0) / len);
-    setData({
-      ...data,
-      deptRows: newRows,
-      instTlr, instRpc, instGo, instOi, instPr,
-      instTotal: instTlr + instRpc + instGo + instOi + instPr,
-    });
+    setData({ ...data, deptRows: newRows, instTlr, instRpc, instGo, instOi, instPr, instTotal: instTlr + instRpc + instGo + instOi + instPr });
   };
 
   const recalc = () => {
     const r = deptRows[selectedDept];
     if (!r) return;
-    const dPubs = r.pubs || 0;
-    const dPhd = r.phd || 0;
-    const dGranted = r.granted || 0;
-    const dFac = r.dF?.length || 1;
+    const dPubs = r.pubs || 0; const dPhd = r.phd || 0; const dGranted = r.granted || 0; const dFac = r.dF?.length || 1;
     const tlr = Math.min(30, 22 * (dPubs / 8) * 0.4 + 22 * (dPhd / Math.max(dFac, 1)) * 0.6);
     const rpc = Math.min(30, 15 + dPubs * 0.4 + dGranted * 1.5);
     const go = Math.min(20, 14 + (r.achieved / Math.max(r.target, 1)) * 4);
     const oi = Math.min(10, 7 + dFac * 0.1);
     const pr = Math.min(10, 5 + (dPubs + dGranted) * 0.2);
     const total = tlr + rpc + go + oi + pr;
-    const pct = safe((total / 70) * 100);
     updateDeptRow("tlr", Math.round(tlr * 100) / 100);
     updateDeptRow("rpc", Math.round(rpc * 100) / 100);
     updateDeptRow("go", Math.round(go * 100) / 100);
     updateDeptRow("oi", Math.round(oi * 100) / 100);
     updateDeptRow("pr", Math.round(pr * 100) / 100);
     updateDeptRow("total", Math.round(total * 100) / 100);
-    updateDeptRow("pct", Math.round(pct));
+    updateDeptRow("pct", Math.round(safe((total / 70) * 100)));
   };
 
   const updateInstField = (field: keyof ReportData, value: any) => {
@@ -134,7 +139,8 @@ function DataEditStep({ data, setData }: { data: ReportData; setData: (d: Report
     <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
       <div className="flex gap-2 border-b pb-2">
         <Button size="sm" variant={activeTab === "departments" ? "default" : "outline"} onClick={() => setActiveTab("departments")}>Department Data</Button>
-        <Button size="sm" variant={activeTab === "institutional" ? "default" : "outline"} onClick={() => setActiveTab("institutional")}>Institutional Totals</Button>
+        <Button size="sm" variant={activeTab === "categories" ? "default" : "outline"} onClick={() => setActiveTab("categories")}>Target Categories (14)</Button>
+        <Button size="sm" variant={activeTab === "institutional" ? "default" : "outline"} onClick={() => setActiveTab("institutional")}>Institutional</Button>
       </div>
 
       {activeTab === "departments" && (
@@ -146,28 +152,24 @@ function DataEditStep({ data, setData }: { data: ReportData; setData: (d: Report
               </Button>
             ))}
           </div>
-
           {row && (
             <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold text-sm">{row.dept?.name || "Department"}</h4>
                 <Button size="sm" variant="outline" onClick={recalc} className="text-xs"><RotateCcw className="h-3 w-3 mr-1" />Auto-Calculate Scores</Button>
               </div>
-
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div><Label className="text-xs">Faculty Count</Label><Input type="number" value={row.dF?.length || 0} onChange={e => updateDeptRow("dF", Array(Math.max(0, Number(e.target.value))).fill({}))} className="text-xs" /></div>
                 <div><Label className="text-xs">PhD Faculty</Label><Input type="number" value={row.phd || 0} onChange={e => updateDeptRow("phd", Number(e.target.value))} className="text-xs" /></div>
                 <div><Label className="text-xs">Publications</Label><Input type="number" value={row.pubs || 0} onChange={e => updateDeptRow("pubs", Number(e.target.value))} className="text-xs" /></div>
                 <div><Label className="text-xs">Granted Patents</Label><Input type="number" value={row.granted || 0} onChange={e => updateDeptRow("granted", Number(e.target.value))} className="text-xs" /></div>
               </div>
-
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div><Label className="text-xs">Target</Label><Input type="number" value={row.target || 70} onChange={e => updateDeptRow("target", Number(e.target.value))} className="text-xs" /></div>
                 <div><Label className="text-xs">Achieved</Label><Input type="number" value={row.achieved || 0} onChange={e => updateDeptRow("achieved", Number(e.target.value))} className="text-xs" /></div>
               </div>
-
               <div className="border-t pt-3">
-                <Label className="text-xs font-semibold text-blue-700">NIRF Parameter Scores (auto-calculated or manually override)</Label>
+                <Label className="text-xs font-semibold text-blue-700">NIRF Parameter Scores</Label>
                 <div className="grid grid-cols-5 gap-2 mt-2">
                   <div><Label className="text-xs text-muted-foreground">TLR (30)</Label><Input type="number" step="0.01" value={row.tlr || 0} onChange={e => updateDeptRow("tlr", Number(e.target.value))} className="text-xs" /></div>
                   <div><Label className="text-xs text-muted-foreground">RP (30)</Label><Input type="number" step="0.01" value={row.rpc || 0} onChange={e => updateDeptRow("rpc", Number(e.target.value))} className="text-xs" /></div>
@@ -185,13 +187,67 @@ function DataEditStep({ data, setData }: { data: ReportData; setData: (d: Report
         </>
       )}
 
+      {activeTab === "categories" && (
+        <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
+          <h4 className="font-semibold text-sm">Target vs Achievement — All 14 Categories</h4>
+          <p className="text-xs text-muted-foreground">Edit target and achieved values for each category. These appear in Section 4 of the report.</p>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b">
+                <th className="p-2 text-left">S.No</th>
+                <th className="p-2 text-left">Category</th>
+                <th className="p-2 text-center">Target</th>
+                <th className="p-2 text-center">Achieved</th>
+                <th className="p-2 text-center">Pending</th>
+                <th className="p-2 text-center">Completion %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {([
+                ["faculty", "Faculty", 12],
+                ["students", "Students", 256],
+                ["publications", "Publications", 20],
+                ["scopus", "Scopus", 10],
+                ["patents", "Patents", 5],
+                ["researchProjects", "Research Projects", 8],
+                ["consultancy", "Consultancy", 5],
+                ["placements", "Placements", 100],
+                ["higherStudies", "Higher Studies", 30],
+                ["mous", "MoUs", 5],
+                ["events", "Events", 10],
+                ["fdp", "FDP", 15],
+                ["workshops", "Workshops", 10],
+                ["seminars", "Seminars", 8],
+              ] as const).map(([key, label, defaultTarget], i) => {
+                const achieved = cat[key] || 0;
+                const targetVal = defaultTarget;
+                const pending = Math.max(0, targetVal - achieved);
+                const pct = safe((achieved / targetVal) * 100);
+                return (
+                  <tr key={key} className="border-b hover:bg-muted/30">
+                    <td className="p-2 text-center">{i + 1}</td>
+                    <td className="p-2 font-medium">{label}</td>
+                    <td className="p-2 text-center font-bold">{targetVal}</td>
+                    <td className="p-2 text-center">
+                      <Input type="number" value={achieved} onChange={e => updateCat(key, Number(e.target.value))} className="text-xs w-20 text-center mx-auto" />
+                    </td>
+                    <td className="p-2 text-center" style={{ color: pending > 0 ? "#C62828" : "#2E7D32" }}>{pending}</td>
+                    <td className="p-2 text-center">{pct.toFixed(1)}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {activeTab === "institutional" && (
         <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
           <h4 className="font-semibold text-sm">Institution-Wide Totals</h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div><Label className="text-xs">Total Publications</Label><Input type="number" value={(data.allPubs || []).length} readOnly className="text-xs bg-muted" /></div>
             <div><Label className="text-xs">Total Patents</Label><Input type="number" value={(data.allPats || []).length} readOnly className="text-xs bg-muted" /></div>
-            <div><Label className="text-xs">Total Research Projects</Label><Input type="number" value={(data.allRes || []).length} readOnly className="text-xs bg-muted" /></div>
+            <div><Label className="text-xs">Total Research</Label><Input type="number" value={(data.allRes || []).length} readOnly className="text-xs bg-muted" /></div>
             <div><Label className="text-xs">Total Faculty</Label><Input type="number" value={(data.allFac || []).length} readOnly className="text-xs bg-muted" /></div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -209,9 +265,7 @@ function DataEditStep({ data, setData }: { data: ReportData; setData: (d: Report
               <div><Label className="text-xs text-muted-foreground">OI (10)</Label><Input type="number" step="0.01" value={data.instOi || 0} onChange={e => updateInstField("instOi", Number(e.target.value))} className="text-xs" /></div>
               <div><Label className="text-xs text-muted-foreground">PR (10)</Label><Input type="number" step="0.01" value={data.instPr || 0} onChange={e => updateInstField("instPr", Number(e.target.value))} className="text-xs" /></div>
             </div>
-            <div className="mt-2 text-xs">
-              Total Score: <strong>{(data.instTotal || 0).toFixed(2)}</strong> / 100
-            </div>
+            <div className="mt-2 text-xs">Total Score: <strong>{(data.instTotal || 0).toFixed(2)}</strong> / 100</div>
           </div>
         </div>
       )}
@@ -290,6 +344,9 @@ export default function ReportsPage() {
     });
 
     const len = Math.max(deptRows.length, 1);
+    const instTotal = safe(deptRows.reduce((s, r) => s + r.tlr, 0) / len) + safe(deptRows.reduce((s, r) => s + r.rpc, 0) / len) + safe(deptRows.reduce((s, r) => s + r.go, 0) / len) + safe(deptRows.reduce((s, r) => s + r.oi, 0) / len) + safe(deptRows.reduce((s, r) => s + r.pr, 0) / len);
+    const totalTarget = targets.reduce((s, t) => s + (Number((t as any).yearly) || 0), 0);
+    const totalAchieved = targets.reduce((s, t) => s + (Number((t as any).achieved) || 0), 0);
     return {
       deptRows,
       instTlr: safe(deptRows.reduce((s, r) => s + r.tlr, 0) / len),
@@ -297,11 +354,26 @@ export default function ReportsPage() {
       instGo: safe(deptRows.reduce((s, r) => s + r.go, 0) / len),
       instOi: safe(deptRows.reduce((s, r) => s + r.oi, 0) / len),
       instPr: safe(deptRows.reduce((s, r) => s + r.pr, 0) / len),
-      instTotal: 0,
+      instTotal,
       allPubs: publications, allPats: patents, allRes: research,
       allFac: faculties, allStu: students, allTgt: targets,
-      totalTarget: targets.reduce((s, t) => s + (Number((t as any).yearly) || 0), 0),
-      totalAchieved: targets.reduce((s, t) => s + (Number((t as any).achieved) || 0), 0),
+      totalTarget, totalAchieved,
+      categories: {
+        faculty: faculties.length,
+        students: students.length,
+        publications: publications.filter((p: any) => p.status === "published").length,
+        scopus: publications.filter((p: any) => p.isScopus).length,
+        patents: patents.filter((p: any) => p.status === "granted").length,
+        researchProjects: research.length,
+        consultancy: 0,
+        placements: 0,
+        higherStudies: 0,
+        mous: 0,
+        events: 0,
+        fdp: 0,
+        workshops: 0,
+        seminars: 0,
+      },
       deptId: null,
     };
   };
