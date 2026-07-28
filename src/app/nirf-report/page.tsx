@@ -4,12 +4,32 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, FileText, Loader2 } from "lucide-react";
+import { Printer, FileText, Loader2, AlertTriangle } from "lucide-react";
 import NirfReportTemplate from "@/components/reports/NirfReportTemplate";
-import type { ReportData, ReportMeta } from "@/components/reports/NirfReportTemplate";
+import type { ReportConfig, ReportData, ReportMeta } from "@/components/reports/NirfReportTemplate";
 
 function safe(v: number) { return isNaN(v) || !isFinite(v) ? 0 : v; }
+
+const DEFAULT_CONFIG: ReportConfig = {
+  academicYear: "2024-25",
+  rankBand: "151 – 200",
+  hodName: "Dr. A. HOD Name",
+  hodRemark: "Reviewed the report. Departmental targets are monitored and necessary actions are planned for improvement.",
+  vpName: "Dr. B. Vice Principal",
+  vpRemark: "Verified the report. Performance is satisfactory. Departments are directed to achieve the targets.",
+  principalName: "Dr. C. Principal",
+  principalRemark: "Reviewed and approved the report. Continue the efforts to improve NIRF ranking.",
+  remarks: [
+    "The institution has shown consistent growth in overall NIRF score.",
+    "Major improvement is required in Research and Professional Practice (RP) and Perception (PR) parameters.",
+    "Departmental performance is satisfactory with scope for further enhancement.",
+    "Focus on publications, patents, consultancy, placements and industry collaborations.",
+  ],
+  sections: { summary: true, deptTable: true, progress: true, trend: true, remarks: true, signatures: true },
+};
 
 export default function NIRFReportPage() {
   const [loading, setLoading] = useState(true);
@@ -26,10 +46,9 @@ export default function NIRFReportPage() {
   const [showReport, setShowReport] = useState(false);
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [reportMeta, setReportMeta] = useState<ReportMeta | null>(null);
+  const [config, setConfig] = useState<ReportConfig>({ ...DEFAULT_CONFIG });
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "null") : null;
-  const now = new Date();
-  const reportId = `NIRF-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
 
   useEffect(() => {
     const loadAll = async () => {
@@ -59,6 +78,8 @@ export default function NIRFReportPage() {
   const buildReport = () => {
     setGenerating(true);
     const deptId = selectedDept === "all" ? null : selectedDept;
+    const now = new Date();
+    const reportId = `NIRF-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
 
     const deptRows = departments.map(dept => {
       const dF = faculties.filter(f => f.departmentId === dept.id);
@@ -100,7 +121,7 @@ export default function NIRFReportPage() {
     const totalAchieved = allTgt.reduce((s, t) => s + (Number(t.achieved) || 0), 0);
 
     const dept = deptId ? departments.find(d => d.id === deptId) : null;
-    const deptFac = deptId ? faculties.filter(f => f.departmentId === deptId) : [];
+    const deptFac = deptId ? faculties.filter(f => f.departmentId === deptId) : allFac;
     const phdCount = deptFac.filter(f => f.qualification?.toLowerCase().includes("ph.d")).length;
 
     setReportData({
@@ -116,10 +137,11 @@ export default function NIRFReportPage() {
       generatedBy: user?.name || "System",
       deptName: dept?.name || "All Departments",
       deptCode: dept?.code || "ALL",
-      hodName: "",
-      facultyCount: deptFac.length || allFac.length,
-      studentCount: (deptId ? students.filter(s => s.departmentId === deptId).length : students.length),
-      phdCount: phdCount || allFac.filter(f => f.qualification?.toLowerCase().includes("ph.d")).length,
+      deptId,
+      hodName: config.hodName,
+      facultyCount: deptFac.length,
+      studentCount: deptId ? students.filter(s => s.departmentId === deptId).length : students.length,
+      phdCount,
     });
 
     setShowReport(true);
@@ -130,16 +152,37 @@ export default function NIRFReportPage() {
     const el = reportRef.current;
     if (!el) return;
     const w = window.open("", "_blank");
-    if (!w) return;
+    if (!w) {
+      alert("Pop-up blocked. Please allow pop-ups for this site and try again.");
+      return;
+    }
     w.document.write(`<!DOCTYPE html><html><head><title>NIRF Report - JJCET</title>
 <style>
 @page{size:A4 portrait;margin:12mm 15mm;}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Segoe UI','Roboto','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:1.5;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 @media print{body{margin:0;padding:0;}}
+table{page-break-inside:avoid;}
+tr{page-break-inside:avoid;}
 </style></head><body>` + el.innerHTML + `</body></html>`);
     w.document.close();
     setTimeout(() => w.print(), 400);
+  };
+
+  const updateField = (field: keyof ReportConfig, value: any) => {
+    setConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const updateSection = (field: keyof ReportConfig["sections"], value: boolean) => {
+    setConfig(prev => ({ ...prev, sections: { ...prev.sections, [field]: value } }));
+  };
+
+  const updateRemark = (index: number, value: string) => {
+    setConfig(prev => {
+      const newRemarks = [...prev.remarks];
+      newRemarks[index] = value;
+      return { ...prev, remarks: newRemarks };
+    });
   };
 
   if (loading) return (
@@ -160,11 +203,11 @@ body{font-family:'Segoe UI','Roboto','Helvetica Neue',Arial,sans-serif;font-size
         </div>
 
         <Card>
-          <CardHeader><CardTitle>Generate Report</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Report Configuration</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-sm font-medium mb-1 block">Department</label>
+                <Label className="text-xs mb-1 block">Department</Label>
                 <Select value={selectedDept} onValueChange={setSelectedDept}>
                   <SelectTrigger><SelectValue placeholder="All Departments" /></SelectTrigger>
                   <SelectContent>
@@ -173,6 +216,54 @@ body{font-family:'Segoe UI','Roboto','Helvetica Neue',Arial,sans-serif;font-size
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label className="text-xs mb-1 block">Academic Year</Label>
+                <Input value={config.academicYear} onChange={(e) => updateField("academicYear", e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs mb-1 block">Rank Band</Label>
+                <Input value={config.rankBand} onChange={(e) => updateField("rankBand", e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs">HOD Name</Label>
+                <Input value={config.hodName} onChange={(e) => updateField("hodName", e.target.value)} placeholder="HOD Name" className="text-xs" />
+                <textarea className="w-full h-16 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none" value={config.hodRemark} onChange={(e) => updateField("hodRemark", e.target.value)} placeholder="HOD Remark" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Vice Principal Name</Label>
+                <Input value={config.vpName} onChange={(e) => updateField("vpName", e.target.value)} placeholder="VP Name" className="text-xs" />
+                <textarea className="w-full h-16 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none" value={config.vpRemark} onChange={(e) => updateField("vpRemark", e.target.value)} placeholder="VP Remark" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Principal Name</Label>
+                <Input value={config.principalName} onChange={(e) => updateField("principalName", e.target.value)} placeholder="Principal Name" className="text-xs" />
+                <textarea className="w-full h-16 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none" value={config.principalRemark} onChange={(e) => updateField("principalRemark", e.target.value)} placeholder="Principal Remark" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Sections to Include</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  ["summary", "Dept Info & Summary"],
+                  ["progress", "NIRF Parameters"],
+                  ["deptTable", "Target vs Achievement"],
+                  ["trend", "Score Trend"],
+                  ["remarks", "Remarks"],
+                  ["signatures", "Signatures"],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" checked={config.sections[key]} onChange={(e) => updateSection(key, e.target.checked)} className="rounded" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="flex items-end">
                 <Button onClick={buildReport} disabled={generating} size="lg" className="w-full">
                   {generating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Generating...</> : <><FileText className="h-4 w-4 mr-2" />Generate NIRF Report</>}
@@ -190,23 +281,7 @@ body{font-family:'Segoe UI','Roboto','Helvetica Neue',Arial,sans-serif;font-size
         {showReport && reportData && reportMeta && (
           <div ref={reportRef} className="bg-white shadow-2xl rounded overflow-hidden">
             <NirfReportTemplate
-              config={{
-                academicYear: "2024-25",
-                rankBand: "151 – 200",
-                hodName: "",
-                hodRemark: "",
-                vpName: "",
-                vpRemark: "",
-                principalName: "",
-                principalRemark: "",
-                remarks: [
-                  "The institution has shown consistent growth in overall NIRF score.",
-                  "Major improvement is required in Research and Professional Practice (RP) and Perception (PR) parameters.",
-                  "Departmental performance is satisfactory with scope for further enhancement.",
-                  "Focus on publications, patents, consultancy, placements and industry collaborations.",
-                ],
-                sections: { summary: true, deptTable: true, progress: true, trend: true, remarks: true, signatures: true },
-              }}
+              config={config}
               data={reportData}
               meta={reportMeta}
             />

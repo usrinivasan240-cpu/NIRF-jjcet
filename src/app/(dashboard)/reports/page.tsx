@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -9,29 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, Plus, Eye, Send, Trash2, Download, Printer, Edit, Save, X, Loader2 } from "lucide-react";
+import { FileText, Plus, Eye, Send, Trash2, Download, Printer, Edit, Save, X, Loader2, AlertTriangle } from "lucide-react";
 import NirfReportTemplate from "@/components/reports/NirfReportTemplate";
-import type { ReportData, ReportMeta } from "@/components/reports/NirfReportTemplate";
-
-interface ReportConfig {
-  academicYear: string;
-  rankBand: string;
-  hodName: string;
-  hodRemark: string;
-  vpName: string;
-  vpRemark: string;
-  principalName: string;
-  principalRemark: string;
-  remarks: string[];
-  sections: {
-    summary: boolean;
-    deptTable: boolean;
-    progress: boolean;
-    trend: boolean;
-    remarks: boolean;
-    signatures: boolean;
-  };
-}
+import type { ReportConfig, ReportData, ReportMeta } from "@/components/reports/NirfReportTemplate";
 
 const REPORT_TYPES = [
   { value: "staff", label: "Staff Reports" },
@@ -50,7 +30,7 @@ function genId() {
   return "rpt-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-function ConfigForm({ config, setConfig, onChange }: { config: ReportConfig; setConfig: (c: ReportConfig) => void; onChange?: () => void }) {
+function ConfigForm({ config, setConfig }: { config: ReportConfig; setConfig: (c: ReportConfig) => void }) {
   const updateField = (field: keyof ReportConfig, value: any) => {
     setConfig({ ...config, [field]: value });
   };
@@ -86,12 +66,12 @@ function ConfigForm({ config, setConfig, onChange }: { config: ReportConfig; set
         <Label className="text-xs font-semibold">Sections to Include</Label>
         <div className="grid grid-cols-2 gap-2">
           {([
-            ["summary", "NIRF Report Summary"],
-            ["deptTable", "Department Wise Target vs Achieved"],
-            ["progress", "Parameter Wise Progress"],
+            ["summary", "Department Info & Executive Summary"],
+            ["progress", "NIRF Parameter Summary"],
+            ["deptTable", "Target vs Achievement & Pending"],
             ["trend", "NIRF Score Trend"],
-            ["remarks", "Overall Remarks"],
-            ["signatures", "Signatures"],
+            ["remarks", "Remarks & Signatories"],
+            ["signatures", "Signature Block"],
           ] as const).map(([key, label]) => (
             <label key={key} className="flex items-center gap-2 text-xs cursor-pointer">
               <input type="checkbox" checked={config.sections[key]} onChange={(e) => updateSection(key, e.target.checked)} className="rounded" />
@@ -168,10 +148,9 @@ export default function ReportsPage() {
   const [config, setConfig] = useState<ReportConfig>({ ...DEFAULT_CONFIG });
   const [viewerConfig, setViewerConfig] = useState<ReportConfig>({ ...DEFAULT_CONFIG });
   const reportPrintRef = useRef<HTMLDivElement>(null);
+  const reportIdRef = useRef<string>("");
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "null") : null;
-  const now = new Date();
-  const reportId = `RPT-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
   const loadReports = async () => {
     try {
@@ -187,7 +166,7 @@ export default function ReportsPage() {
     loadReports();
   }, []);
 
-  const loadNirfDataFromEngine = async (): Promise<{ deptRows: any[]; instTlr: number; instRpc: number; instGo: number; instOi: number; instPr: number; instTotal: number } | null> => {
+  const loadNirfDataFromEngine = async (): Promise<ReportData | null> => {
     const ENGINE_URL = process.env.NEXT_PUBLIC_REPORT_ENGINE_URL || "http://localhost:5000/api";
     try {
       const token = localStorage.getItem("token");
@@ -207,35 +186,59 @@ export default function ReportsPage() {
       const json = await res.json();
       if (!json.success || !json.data) return null;
       const engineData = json.data;
-      const deptRows = (engineData.departmentRows || []).map((row: any, i: number) => {
+      const deptRows = (engineData.departmentRows || []).map((row: any) => {
         const agg = row.aggregate;
         const targetTotal = row.targetVsAchievement.reduce((s: number, t: any) => s + t.yearlyTarget, 0);
         const achievedTotal = row.targetVsAchievement.reduce((s: number, t: any) => s + t.achieved, 0);
+        const phd = agg.phdScholarCount;
+        const pubs = agg.publicationCount;
+        const granted = agg.grantedPatentCount;
+        const tlr = Math.min(30, 22 * (pubs / 8) * 0.4 + 22 * (phd / Math.max(agg.facultyCount, 1)) * 0.6);
+        const rpc = Math.min(30, 15 + pubs * 0.4 + granted * 1.5);
+        const go = Math.min(20, 14 + safe(achievedTotal / Math.max(targetTotal, 1)) * 4);
+        const oi = Math.min(10, 7 + agg.facultyCount * 0.1);
+        const pr = Math.min(10, 5 + (pubs + granted) * 0.2);
+        const total = tlr + rpc + go + oi + pr;
         return {
           dept: { id: row.department.id, name: row.department.name },
           dF: [], dP: [], dPat: [], dR: [], dT: row.targetVsAchievement,
-          phd: agg.phdScholarCount, pubs: agg.publicationCount, granted: agg.grantedPatentCount,
-          tlr: safe(targetTotal * 0.3), rpc: safe(targetTotal * 0.3), go: safe(targetTotal * 0.2),
-          oi: safe(targetTotal * 0.1), pr: safe(targetTotal * 0.1),
-          total: safe(achievedTotal), target: safe(targetTotal), achieved: safe(achievedTotal),
-          pct: row.overallAchievedPct || 0,
+          phd, pubs, granted, tlr, rpc, go, oi, pr,
+          total, target: 70, achieved: total,
+          pct: safe((total / 70) * 100),
         };
       });
-      const totals = engineData.institutionTotals || {};
-      const instTlr = safe(totals.publicationCount || 0);
-      const instRpc = safe(totals.grantedPatentCount || 0);
-      const instGo = safe(totals.researchCount || 0);
-      const instOi = safe(totals.studentCount || 0);
-      const instPr = safe(totals.eventCount || 0);
-      const instTotal = instTlr + instRpc + instGo + instOi + instPr;
-      return { deptRows, instTlr, instRpc, instGo, instOi, instPr, instTotal };
+
+      const allFac = engineData.faculty || [];
+      const allStu = engineData.students || [];
+      const allPubs = engineData.publications || [];
+      const allPats = engineData.patents || [];
+      const allRes = engineData.research || [];
+      const allTgt = deptRows.flatMap((r: any) => r.dT);
+      const totalTarget = allTgt.reduce((s: number, t: any) => s + (t.yearlyTarget || t.yearly || 0), 0);
+      const totalAchieved = allTgt.reduce((s: number, t: any) => s + (t.achieved || 0), 0);
+      const phdCount = allFac.filter((f: any) => f.qualification?.toLowerCase().includes("ph.d")).length;
+
+      const len = Math.max(deptRows.length, 1);
+      const instTlr = safe(deptRows.reduce((s: number, r: any) => s + r.tlr, 0) / len);
+      const instRpc = safe(deptRows.reduce((s: number, r: any) => s + r.rpc, 0) / len);
+      const instGo = safe(deptRows.reduce((s: number, r: any) => s + r.go, 0) / len);
+      const instOi = safe(deptRows.reduce((s: number, r: any) => s + r.oi, 0) / len);
+      const instPr = safe(deptRows.reduce((s: number, r: any) => s + r.pr, 0) / len);
+
+      return {
+        deptRows,
+        instTlr, instRpc, instGo, instOi, instPr,
+        instTotal: instTlr + instRpc + instGo + instOi + instPr,
+        allPubs, allPats, allRes, allFac, allStu, allTgt,
+        totalTarget, totalAchieved, deptId: null,
+      };
     } catch (e) {
       console.warn("Report engine API unavailable, falling back to client-side calculation:", e);
       return null;
     }
   };
 
-  const loadNirfData = async () => {
+  const loadNirfData = async (): Promise<ReportData> => {
     const [depSnap, facSnap, pubSnap, patSnap, resSnap, stuSnap, tgtSnap] = await Promise.all([
       getDocs(collection(db, "departments")),
       getDocs(collection(db, "faculties")),
@@ -251,7 +254,7 @@ export default function ReportsPage() {
     const patents = patSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
     const research = resSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
     const students = stuSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    const targets = tgtSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const targets = targets_raw(tgtSnap);
 
     const deptRows = departments.map((dept) => {
       const dF = faculties.filter((f: any) => f.departmentId === dept.id);
@@ -280,7 +283,6 @@ export default function ReportsPage() {
     const instGo = safe(deptRows.reduce((s, r) => s + r.go, 0) / len);
     const instOi = safe(deptRows.reduce((s, r) => s + r.oi, 0) / len);
     const instPr = safe(deptRows.reduce((s, r) => s + r.pr, 0) / len);
-    const instTotal = instTlr + instRpc + instGo + instOi + instPr;
 
     const allPubs = publications;
     const allPats = patents;
@@ -288,16 +290,52 @@ export default function ReportsPage() {
     const allFac = faculties;
     const allStu = students;
     const allTgt = targets;
-    const totalTarget = allTgt.reduce((s, t) => s + (Number(t.yearly) || 0), 0);
-    const totalAchieved = allTgt.reduce((s, t) => s + (Number(t.achieved) || 0), 0);
+    const totalTarget = allTgt.reduce((s, t) => s + (Number((t as any).yearly) || 0), 0);
+    const totalAchieved = allTgt.reduce((s, t) => s + (Number((t as any).achieved) || 0), 0);
+    const phdCount = allFac.filter((f: any) => f.qualification?.toLowerCase().includes("ph.d")).length;
 
-    return { deptRows, instTlr, instRpc, instGo, instOi, instPr, instTotal, allPubs, allPats, allRes, allFac, allStu, allTgt, totalTarget, totalAchieved, deptId: null };
+    return {
+      deptRows,
+      instTlr, instRpc, instGo, instOi, instPr,
+      instTotal: instTlr + instRpc + instGo + instOi + instPr,
+      allPubs, allPats, allRes, allFac, allStu, allTgt,
+      totalTarget, totalAchieved, deptId: null,
+    };
+  };
+
+  function targets_raw(snap: any) {
+    return snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+  }
+
+  const buildMeta = (reportId: string, savedConfig: ReportConfig, report: any, data: ReportData): ReportMeta => {
+    const allFac = data.allFac || [];
+    const allStu = data.allStu || [];
+    const phdCount = allFac.filter((f: any) => f.qualification?.toLowerCase().includes("ph.d")).length;
+    return {
+      reportId,
+      generatedOn: report?.createdAt
+        ? new Date(report.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" })
+        : new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
+      generatedAt: report?.createdAt
+        ? new Date(report.createdAt).toLocaleTimeString("en-IN")
+        : new Date().toLocaleTimeString("en-IN"),
+      generatedBy: report?.creatorId || user?.name || "System",
+      deptName: "All Departments",
+      deptCode: "ALL",
+      deptId: report?.departmentId || null,
+      hodName: savedConfig.hodName,
+      facultyCount: allFac.length,
+      studentCount: allStu.length,
+      phdCount,
+    };
   };
 
   const generateReport = async () => {
     setGenerating(true);
+    setNirfLoading(true);
     try {
       const id = genId();
+      reportIdRef.current = id;
       const timestamp = new Date().toISOString();
       const reportData = {
         title: `NIRF Report – ${config.academicYear}`,
@@ -312,36 +350,27 @@ export default function ReportsPage() {
         updatedAt: timestamp,
       };
       await setDoc(doc(db, "reports", id), reportData);
-      setShowGenerate(false);
       loadReports();
+
       const engineData = await loadNirfDataFromEngine();
+      let fullData: ReportData;
       if (engineData) {
-        setNirfReportData(engineData as any);
+        fullData = engineData;
       } else {
-        const fullData = await loadNirfData();
-        setNirfReportData(fullData);
+        fullData = await loadNirfData();
       }
-      setNirfReportMeta({
-        reportId: id,
-        generatedOn: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "2-digit" }),
-        generatedAt: new Date().toLocaleTimeString("en-IN"),
-        generatedBy: user?.name || "System",
-        deptName: "All Departments",
-        deptCode: "ALL",
-        deptId: user?.departmentId || null,
-        hodName: config.hodName,
-        facultyCount: 0,
-        studentCount: 0,
-        phdCount: 0,
-      });
+      setNirfReportData(fullData);
+      setNirfReportMeta(buildMeta(id, config, { id, ...reportData }, fullData));
       setViewerConfig({ ...config });
       setSelectedReport({ id, ...reportData });
       setIsEditing(false);
+      setShowGenerate(false);
       setShowViewer(true);
     } catch (e) {
       console.error("Generate report error:", e);
       alert("Error generating report: " + (e as Error).message);
     }
+    setNirfLoading(false);
     setGenerating(false);
   };
 
@@ -375,25 +404,14 @@ export default function ReportsPage() {
 
     try {
       const engineData = await loadNirfDataFromEngine();
+      let fullData: ReportData;
       if (engineData) {
-        setNirfReportData(engineData as any);
+        fullData = engineData;
       } else {
-        const fullData = await loadNirfData();
-        setNirfReportData(fullData);
+        fullData = await loadNirfData();
       }
-      setNirfReportMeta({
-        reportId: r.id || "DRAFT",
-        generatedOn: r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "2-digit" }) : new Date().toLocaleDateString("en-IN"),
-        generatedAt: r.createdAt ? new Date(r.createdAt).toLocaleTimeString("en-IN") : new Date().toLocaleTimeString("en-IN"),
-        generatedBy: r.creatorId || "System",
-        deptName: "All Departments",
-        deptCode: "ALL",
-        deptId: r.departmentId || null,
-        hodName: savedConfig.hodName,
-        facultyCount: 0,
-        studentCount: 0,
-        phdCount: 0,
-      });
+      setNirfReportData(fullData);
+      setNirfReportMeta(buildMeta(r.id || "DRAFT", savedConfig, r, fullData));
     } catch (e) {
       console.error("Load NIRF data error:", e);
     }
@@ -430,15 +448,20 @@ export default function ReportsPage() {
     const el = reportPrintRef.current;
     if (!el) return;
     const w = window.open("", "_blank");
-    if (!w) return;
+    if (!w) {
+      alert("Pop-up blocked. Please allow pop-ups for this site and try again.");
+      return;
+    }
     w.document.write(`<!DOCTYPE html><html><head><title>NIRF Report – ${viewerConfig.academicYear} – JJCET</title>
 <style>
-@page{size:A4 portrait;margin:5mm;}
+@page{size:A4 portrait;margin:12mm 15mm;}
 *{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:1.3;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact;width:100%;margin:0;padding:0;}
+body{font-family:'Segoe UI','Roboto','Helvetica Neue',Arial,sans-serif;font-size:11px;line-height:1.5;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+table{page-break-inside:avoid;}
+tr{page-break-inside:avoid;}
 </style></head><body>` + el.innerHTML + `</body></html>`);
     w.document.close();
-    setTimeout(() => w.print(), 300);
+    setTimeout(() => w.print(), 400);
   };
 
   const downloadCSV = () => {
@@ -570,7 +593,10 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:1.3;color:
                       <NirfReportTemplate config={viewerConfig} data={nirfReportData} meta={nirfReportMeta} />
                     </div>
                   ) : (
-                    <div className="p-8 text-center text-muted-foreground">Failed to load NIRF data.</div>
+                    <div className="p-8 text-center text-muted-foreground flex flex-col items-center gap-2">
+                      <AlertTriangle className="h-8 w-8 text-yellow-500" />
+                      <p>Failed to load NIRF data. Check if data has been seeded.</p>
+                    </div>
                   )}
                 </>
               )}
