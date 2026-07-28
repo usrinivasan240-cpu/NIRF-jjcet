@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,8 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Trash2, Edit, Calendar } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "/api";
-
 export default function EventsPage() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,15 +18,11 @@ export default function EventsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", type: "conference", date: "", endDate: "", venue: "", participants: "", organizer: "", status: "upcoming", description: "" });
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-
   const load = async () => {
     try {
-      const r = await fetch(`${API}/events`, { headers });
-      const d = await r.json();
-      if (d.success) setItems(d.data || []);
-    } catch {}
+      const snap = await getDocs(collection(db, "events"));
+      setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error("Load error:", e); }
     setLoading(false);
   };
 
@@ -49,17 +45,16 @@ export default function EventsPage() {
   };
 
   const save = async () => {
-    const method = editingId ? "PUT" : "POST";
-    const url = editingId ? `${API}/events/${editingId}` : `${API}/events`;
+    const id = editingId || "evt-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     try {
-      await fetch(url, { method, headers, body: JSON.stringify({ ...form, participants: parseInt(form.participants) || 0 }) });
+      await setDoc(doc(db, "events", id), { ...form, participants: parseInt(form.participants) || 0, updatedAt: new Date().toISOString() }, { merge: true });
       setShowForm(false); setEditingId(null); load();
-    } catch {}
+    } catch (e) { console.error("Save error:", e); }
   };
 
   const remove = async (id: string) => {
     if (!confirm("Delete this event?")) return;
-    try { await fetch(`${API}/events/${id}`, { method: "DELETE", headers }); load(); } catch {}
+    try { await deleteDoc(doc(db, "events", id)); load(); } catch (e) { console.error("Delete error:", e); }
   };
 
   const typeColors: Record<string, string> = { conference: "bg-blue-100 text-blue-800", workshop: "bg-green-100 text-green-800", seminar: "bg-purple-100 text-purple-800", fest: "bg-orange-100 text-orange-800", symposium: "bg-pink-100 text-pink-800" };

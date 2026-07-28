@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Trash2, Edit, Building2 } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "/api";
-
 export default function DepartmentsPage() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,15 +17,11 @@ export default function DepartmentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", code: "", description: "", hodId: "" });
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-
   const load = async () => {
     try {
-      const r = await fetch(`${API}/departments`, { headers });
-      const d = await r.json();
-      if (d.success) setItems(d.data || []);
-    } catch {}
+      const snap = await getDocs(collection(db, "departments"));
+      setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error("Load error:", e); }
     setLoading(false);
   };
 
@@ -43,17 +39,16 @@ export default function DepartmentsPage() {
   };
 
   const save = async () => {
-    const method = editingId ? "PUT" : "POST";
-    const url = editingId ? `${API}/departments/${editingId}` : `${API}/departments`;
+    const id = editingId || "dept-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     try {
-      await fetch(url, { method, headers, body: JSON.stringify(form) });
+      await setDoc(doc(db, "departments", id), { ...form, updatedAt: new Date().toISOString() }, { merge: true });
       setShowForm(false); setEditingId(null); load();
-    } catch {}
+    } catch (e) { console.error("Save error:", e); }
   };
 
   const remove = async (id: string) => {
     if (!confirm("Delete this department?")) return;
-    try { await fetch(`${API}/departments/${id}`, { method: "DELETE", headers }); load(); } catch {}
+    try { await deleteDoc(doc(db, "departments", id)); load(); } catch (e) { console.error("Delete error:", e); }
   };
 
   return (

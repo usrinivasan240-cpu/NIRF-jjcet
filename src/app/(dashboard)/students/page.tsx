@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,8 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Trash2, Edit, GraduationCap } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "/api";
-
 export default function StudentsPage() {
   const [items, setItems] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
@@ -19,17 +19,15 @@ export default function StudentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", rollNumber: "", email: "", category: "", title: "", year: "", departmentId: "", guideName: "", status: "ongoing" });
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-
   const load = async () => {
     try {
-      const [sRes, dRes] = await Promise.all([fetch(`${API}/students`, { headers }), fetch(`${API}/departments`, { headers })]);
-      const sData = await sRes.json();
-      const dData = await dRes.json();
-      if (sData.success) setItems(sData.data || []);
-      if (dData.success) setDepartments(dData.data || []);
-    } catch {}
+      const [sSnap, dSnap] = await Promise.all([
+        getDocs(collection(db, "students")),
+        getDocs(collection(db, "departments")),
+      ]);
+      setItems(sSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setDepartments(dSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error("Load error:", e); }
     setLoading(false);
   };
 
@@ -51,17 +49,16 @@ export default function StudentsPage() {
   };
 
   const save = async () => {
-    const method = editingId ? "PUT" : "POST";
-    const url = editingId ? `${API}/students/${editingId}` : `${API}/students`;
+    const id = editingId || "stu-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     try {
-      await fetch(url, { method, headers, body: JSON.stringify(form) });
+      await setDoc(doc(db, "students", id), { ...form, updatedAt: new Date().toISOString() }, { merge: true });
       setShowForm(false); setEditingId(null); load();
-    } catch {}
+    } catch (e) { console.error("Save error:", e); }
   };
 
   const remove = async (id: string) => {
     if (!confirm("Delete this record?")) return;
-    try { await fetch(`${API}/students/${id}`, { method: "DELETE", headers }); load(); } catch {}
+    try { await deleteDoc(doc(db, "students", id)); load(); } catch (e) { console.error("Delete error:", e); }
   };
 
   const deptName = (id: string) => departments.find(d => d.id === id)?.name || "N/A";

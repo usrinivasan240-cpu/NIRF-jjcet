@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,8 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Trash2, Edit, FlaskConical } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "/api";
-
 export default function ResearchPage() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,15 +18,11 @@ export default function ResearchPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", pi: "", coPi: "", fundingAgency: "", amount: "", status: "ongoing", startDate: "", endDate: "", sanctionedYear: "", description: "" });
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-
   const load = async () => {
     try {
-      const r = await fetch(`${API}/research`, { headers });
-      const d = await r.json();
-      if (d.success) setItems(d.data || []);
-    } catch {}
+      const snap = await getDocs(collection(db, "research"));
+      setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error("Load error:", e); }
     setLoading(false);
   };
 
@@ -50,17 +46,16 @@ export default function ResearchPage() {
   };
 
   const save = async () => {
-    const method = editingId ? "PUT" : "POST";
-    const url = editingId ? `${API}/research/${editingId}` : `${API}/research`;
+    const id = editingId || "res-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     try {
-      await fetch(url, { method, headers, body: JSON.stringify({ ...form, amount: parseFloat(form.amount) || 0 }) });
+      await setDoc(doc(db, "research", id), { ...form, amount: parseFloat(form.amount) || 0, updatedAt: new Date().toISOString() }, { merge: true });
       setShowForm(false); setEditingId(null); load();
-    } catch {}
+    } catch (e) { console.error("Save error:", e); }
   };
 
   const remove = async (id: string) => {
     if (!confirm("Delete this project?")) return;
-    try { await fetch(`${API}/research/${id}`, { method: "DELETE", headers }); load(); } catch {}
+    try { await deleteDoc(doc(db, "research", id)); load(); } catch (e) { console.error("Delete error:", e); }
   };
 
   const statusColors: Record<string, string> = { ongoing: "bg-blue-100 text-blue-800", completed: "bg-green-100 text-green-800", sanctioned: "bg-yellow-100 text-yellow-800" };

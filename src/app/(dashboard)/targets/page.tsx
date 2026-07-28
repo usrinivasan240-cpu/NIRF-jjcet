@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Trash2, Edit, Target } from "lucide-react";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 const CATEGORIES = [
   "Publications", "Patents", "Funded Projects", "Conferences", "Workshops",
@@ -25,17 +25,15 @@ export default function TargetsPage() {
   const [form, setForm] = useState({ category: "", yearly: "", achieved: "0", year: "2024-25", departmentId: "" });
   const [departments, setDepartments] = useState<any[]>([]);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-
   const load = async () => {
     try {
-      const [tRes, dRes] = await Promise.all([fetch(`${API}/targets`, { headers }), fetch(`${API}/departments`, { headers })]);
-      const tData = await tRes.json();
-      const dData = await dRes.json();
-      if (tData.success) setItems(tData.data || []);
-      if (dData.success) setDepartments(dData.data || []);
-    } catch {}
+      const [tSnap, dSnap] = await Promise.all([
+        getDocs(collection(db, "targets")),
+        getDocs(collection(db, "departments")),
+      ]);
+      setItems(tSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setDepartments(dSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error("Load error:", e); }
     setLoading(false);
   };
 
@@ -57,20 +55,16 @@ export default function TargetsPage() {
   };
 
   const save = async () => {
-    const method = editingId ? "PUT" : "POST";
-    const url = editingId ? `${API}/targets/${editingId}` : `${API}/targets`;
+    const id = editingId || "tgt-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     try {
-      await fetch(url, {
-        method, headers,
-        body: JSON.stringify({ ...form, yearly: parseInt(form.yearly) || 0, achieved: parseInt(form.achieved) || 0 }),
-      });
+      await setDoc(doc(db, "targets", id), { ...form, yearly: parseInt(form.yearly) || 0, achieved: parseInt(form.achieved) || 0, updatedAt: new Date().toISOString() }, { merge: true });
       setShowForm(false); setEditingId(null); load();
-    } catch {}
+    } catch (e) { console.error("Save error:", e); }
   };
 
   const remove = async (id: string) => {
     if (!confirm("Delete this target?")) return;
-    try { await fetch(`${API}/targets/${id}`, { method: "DELETE", headers }); load(); } catch {}
+    try { await deleteDoc(doc(db, "targets", id)); load(); } catch (e) { console.error("Delete error:", e); }
   };
 
   const getProgress = (target: any) => {
