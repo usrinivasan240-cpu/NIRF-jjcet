@@ -109,10 +109,9 @@ export default function NirfReportTemplate({
   const oi = safe(instOi);
   const pr = safe(instPr);
   const total = safe(instTotal);
-  const overallPct = safe(totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0);
-
   const totalTarget = safe(data?.totalTarget);
   const totalAchieved = safe(data?.totalAchieved);
+  const overallPct = safe(totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0);
   const allFac = data?.allFac || [];
   const allStu = data?.allStu || [];
   const allPubs = data?.allPubs || [];
