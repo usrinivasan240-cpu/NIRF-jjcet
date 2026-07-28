@@ -282,7 +282,6 @@ export default function NirfReportTemplate({
                 <th style={thStyle}>Overall Achieved</th>
                 <th style={thStyle}>Achievement %</th>
                 <th style={thStyle}>Department Rank</th>
-                <th style={thStyle}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -291,11 +290,6 @@ export default function NirfReportTemplate({
                 <td style={{ ...tdStyle, textAlign: "center", fontWeight: "800", fontSize: "14px", color: "#0D47A1" }}>{totalAchieved}</td>
                 <td style={{ ...tdStyle, textAlign: "center", fontWeight: "800", fontSize: "14px", color: statusColor(overallPct) }}>{overallPct.toFixed(1)}%</td>
                 <td style={{ ...tdStyle, textAlign: "center", fontWeight: "800", fontSize: "14px", color: "#0D47A1" }}>{config.rankBand}</td>
-                <td style={{ ...tdStyle, textAlign: "center" }}>
-                  <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "3px", fontSize: "9px", fontWeight: "700", color: "white", background: statusColor(overallPct) }}>
-                    {statusLabel(overallPct)}
-                  </span>
-                </td>
               </tr>
             </tbody>
           </table>
@@ -313,7 +307,6 @@ export default function NirfReportTemplate({
                 <th style={{ ...thStyle, textAlign: "center" }}>Target (Max)</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Achieved</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Achievement %</th>
-                <th style={{ ...thStyle, textAlign: "center" }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -325,9 +318,6 @@ export default function NirfReportTemplate({
                     <td style={{ ...tdStyle, textAlign: "center" }}>{p.target}</td>
                     <td style={{ ...tdStyle, textAlign: "center", fontWeight: "700" }}>{p.achieved.toFixed(2)}</td>
                     <td style={{ ...tdStyle, textAlign: "center" }}>{pct.toFixed(1)}%</td>
-                    <td style={{ ...tdStyle, textAlign: "center" }}>
-                      <StatusBadge pct={pct} />
-                    </td>
                   </tr>
                 );
               })}
@@ -336,7 +326,6 @@ export default function NirfReportTemplate({
                 <td style={{ ...tdStyle, textAlign: "center", fontWeight: "800" }}>100</td>
                 <td style={{ ...tdStyle, textAlign: "center", fontWeight: "800", color: "#0D47A1" }}>{total.toFixed(2)}</td>
                 <td style={{ ...tdStyle, textAlign: "center", fontWeight: "800" }}>{safe(total).toFixed(1)}%</td>
-                <td style={{ ...tdStyle, textAlign: "center" }}><StatusBadge pct={total} /></td>
               </tr>
             </tbody>
           </table>
@@ -356,7 +345,6 @@ export default function NirfReportTemplate({
                 <th style={{ ...thStyle, textAlign: "center" }}>Achieved</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Pending</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Completion %</th>
-                <th style={{ ...thStyle, textAlign: "center" }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -371,7 +359,6 @@ export default function NirfReportTemplate({
                     <td style={{ ...tdStyle, textAlign: "center", fontWeight: "700" }}>{r.achieved}</td>
                     <td style={{ ...tdStyle, textAlign: "center", color: pending > 0 ? "#C62828" : "#2E7D32" }}>{pending}</td>
                     <td style={{ ...tdStyle, textAlign: "center" }}>{pct.toFixed(1)}%</td>
-                    <td style={{ ...tdStyle, textAlign: "center" }}><StatusBadge pct={pct} /></td>
                   </tr>
                 );
               })}
@@ -400,7 +387,6 @@ export default function NirfReportTemplate({
             <thead>
               <tr>
                 <th style={thStyle}>Document</th>
-                <th style={thStyle}>Status</th>
                 <th style={thStyle}>Verified</th>
               </tr>
             </thead>
@@ -408,7 +394,6 @@ export default function NirfReportTemplate({
               {["NIRF Data Sheet", "Faculty Details", "Publication Records", "Patent Documents", "Research Projects", "Student Records"].map((doc, i) => (
                 <tr key={i} style={{ background: i % 2 === 0 ? "white" : "#F5F7FA" }}>
                   <td style={tdStyle}>{doc}</td>
-                  <td style={{ ...tdStyle, color: "#2E7D32", fontWeight: "600" }}>Available</td>
                   <td style={{ ...tdStyle, color: "#F57C00", fontWeight: "600" }}>Pending</td>
                 </tr>
               ))}
@@ -422,9 +407,6 @@ export default function NirfReportTemplate({
         <>
           <SectionTitle num={7} title="OVERALL DEPARTMENT REMARKS" />
           <div style={{ padding: "8px 12px", border: "1px solid #E0E0E0", background: "#F5F7FA", marginBottom: "8px" }}>
-            <p style={{ fontSize: "10px", fontWeight: "700", margin: "0 0 4px 0", color: statusColor(overallPct) }}>
-              Department Status: {statusLabel(overallPct)}
-            </p>
             {config.remarks.length > 0 && (
               <p style={{ fontSize: "9px", lineHeight: "1.5", margin: 0 }}>
                 {config.remarks.join(" ")}
