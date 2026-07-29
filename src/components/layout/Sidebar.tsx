@@ -16,6 +16,7 @@ const allItems = [
   { href: "/events", label: "Events", icon: Calendar },
   { href: "/targets", label: "Targets", icon: Target },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/generate-report", label: "Generate Report", icon: Award },
   { href: "/nirf-report", label: "NIRF Report", icon: Award },
   { href: "/approvals", label: "Approvals", icon: CheckCircle },
   { href: "/signatures", label: "Signatures", icon: PenTool },
