@@ -18,6 +18,7 @@ import StudentAchievementReport from "@/components/reports/StudentAchievementRep
 import NAACReport from "@/components/reports/NAACReport";
 import IQACReport from "@/components/reports/IQACReport";
 import TargetReport from "@/components/reports/TargetReport";
+import MonthlyReviewReport from "@/components/reports/MonthlyReviewReport";
 import type { ReportConfig, ReportData, ReportMeta } from "@/components/reports/NirfReportTemplate";
 
 function safe(v: number) { return isNaN(v) || !isFinite(v) ? 0 : v; }
@@ -32,6 +33,7 @@ const REPORT_TYPES = [
   { id: "naac", name: "NAAC Report", desc: "NAAC criterion-wise assessment data", icon: "🏅" },
   { id: "iqac", name: "IQAC Report", desc: "Quality initiatives, audits, feedback", icon: "✅" },
   { id: "target", name: "Target Achievement Report", desc: "KPI targets vs actual performance", icon: "🎯" },
+  { id: "monthly", name: "Monthly Review Report", desc: "Department-wise monthly KPI review (PDF format)", icon: "📅" },
 ];
 
 const DEFAULT_CONFIG: ReportConfig = {
@@ -59,6 +61,7 @@ export default function ReportGeneratorPage() {
   const [research, setResearch] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [targets, setTargets] = useState<any[]>([]);
+  const [monthlyReviews, setMonthlyReviews] = useState<any[]>([]);
   const [logoUrl, setLogoUrl] = useState("/images/jjcet-logo.png");
   const [showReport, setShowReport] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
@@ -75,6 +78,7 @@ export default function ReportGeneratorPage() {
           getDocs(collection(db, "research")),
           getDocs(collection(db, "students")),
           getDocs(collection(db, "targets")),
+          getDocs(collection(db, "monthlyReviews")),
           getDoc(doc(db, "appSettings", "main")),
         ]);
         setDepartments(snaps[0].docs.map(d => ({ id: d.id, ...d.data() })));
@@ -84,7 +88,8 @@ export default function ReportGeneratorPage() {
         setResearch(snaps[4].docs.map(d => ({ id: d.id, ...d.data() })));
         setStudents(snaps[5].docs.map(d => ({ id: d.id, ...d.data() })));
         setTargets(snaps[6].docs.map(d => ({ id: d.id, ...d.data() })));
-        if (snaps[7].exists() && snaps[7].data().logoUrl) setLogoUrl(snaps[7].data().logoUrl);
+        setMonthlyReviews(snaps[7].docs.map(d => ({ id: d.id, ...d.data() })));
+        if (snaps[8].exists() && snaps[8].data().logoUrl) setLogoUrl(snaps[8].data().logoUrl);
       } catch (e) { console.error(e); }
       setLoading(false);
     };
@@ -302,6 +307,20 @@ export default function ReportGeneratorPage() {
           summary: { totalKpis: t.length, achieved: t.filter((x: any) => (Number(x.achieved) || 0) >= (Number(x.yearly) || 1)).length, inProgress: 0, behind: 0 },
         };
         return <TargetReport logoUrl={logoUrl} data={targetData} />;
+      }
+      case "monthly": {
+        const dept = departments.find((d: any) => d.id === selectedDept);
+        const reviews = monthlyReviews.filter((r: any) => r.departmentId === selectedDept);
+        const reviewData = {
+          department: { name: dept?.name || "All Departments", code: dept?.code || "ALL" },
+          month: "JUNE",
+          year: "2026",
+          kpis: reviews.flatMap((r: any) => r.kpis || []),
+          actionTaken: reviews.flatMap((r: any) => r.actionTaken || []),
+          hodName: dept?.hodName || "",
+          principalName: "Dr. R. Venkatesan",
+        };
+        return <MonthlyReviewReport data={reviewData} logoUrl={logoUrl} />;
       }
       default:
         return null;
